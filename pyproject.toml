@@ -8,6 +8,7 @@ dependencies = [
     "argparse>=1.4.0",
     "numpy>=2.4.3",
     "optuna>=4.7.0",
+    "ray[train,tune]>=2.54.0",
     "timm>=1.0.25",
     "torch>=2.10.0",
 ]
