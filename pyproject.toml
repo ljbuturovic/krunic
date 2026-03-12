@@ -10,5 +10,5 @@ dependencies = [
     "optuna>=4.7.0",
     "ray[train,tune]>=2.54.0",
     "timm>=1.0.25",
-    "torch>=2.10.0",
+    "torch==2.8.0",
 ]
