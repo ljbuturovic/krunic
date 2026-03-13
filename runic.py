@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tunic.py — Hyperparameter tuning for image classifiers using Optuna + timm."""
+"""runic.py — Hyperparameter tuning for image classifiers using Optuna + timm."""
 
 import argparse
 import json
@@ -44,7 +44,7 @@ except ImportError:
     RAY_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("tunic")
+logger = logging.getLogger("runic")
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -609,7 +609,7 @@ def run_final(args):
             best_epoch = epoch + 1
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
 
-    checkpoint_path = "tunic_final.pt"
+    checkpoint_path = "runic_final.pt"
     torch.save({
         "model_state_dict": best_state,
         "best_val_acc": best_val_acc,
@@ -753,7 +753,7 @@ def run_tuning(args):
 
     run_config = RunConfig(
         storage_path=storage_path,
-        name="tunic_study",
+        name="runic_study",
     )
 
     if args.resume:
@@ -846,7 +846,7 @@ def run_tuning(args):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="tunic — hyperparameter tuning for image classifiers",
+        description="runic — hyperparameter tuning for image classifiers",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--data", type=str, help="Path to dataset root (ImageFolder layout)")
@@ -860,7 +860,7 @@ def parse_args():
                    help="Training epochs per trial")
     p.add_argument("--batch-size", type=int, default=32, dest="batch_size",
                    help="Batch size (fixed across trials)")
-    p.add_argument("--output", type=str, default="tunic_results.json",
+    p.add_argument("--output", type=str, default="runic_results.json",
                    help="Path for output JSON with best hyperparameters")
     p.add_argument("--seed", type=int, default=42,
                    help="Random seed for reproducibility")
@@ -877,7 +877,7 @@ def parse_args():
     p.add_argument("--freeze-backbone", type=int, default=0, dest="freeze_backbone",
                    help="Epochs to freeze backbone; 0 = no freeze")
     p.add_argument("--final", type=str, default=None,
-                   help="Path to tunic_results.json — skip tuning, train final model")
+                   help="Path to runic_results.json — skip tuning, train final model")
     p.add_argument("--final-epochs", type=int, default=None, dest="final_epochs",
                    help="Override epoch count for final training run (defaults to tuning epochs)")
     p.add_argument("--resume", type=str, default=None,

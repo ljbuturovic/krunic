@@ -45,6 +45,6 @@ run: |
     $RESUME_ARG
 
   # Copy final results JSON back to S3
-  aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/runic_results.json
+  ~/venv/bin/aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/runic_results.json
 
 workdir: /home/ljubomir/github/runic
