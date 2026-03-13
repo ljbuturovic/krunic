@@ -39,6 +39,11 @@ try:
     from ray.train import ScalingConfig
     from ray.tune import RunConfig
     from ray.train.torch import TorchTrainer
+    @ray.remote
+    class TrialCounter:
+        def __init__(self): self._n = 0
+        def next(self): self._n += 1; return self._n
+
     RAY_AVAILABLE = True
 except ImportError:
     RAY_AVAILABLE = False
@@ -262,13 +267,15 @@ def build_scheduler(optimizer, epochs: int, steps_per_epoch: int, warmup_epochs:
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
-def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels):
+def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels, trial_id=""):
     model.train()
     total_loss = 0.0
     correct = 0
     total = 0
 
-    bar = tqdm(loader, leave=False, desc="train")
+    desc = f"trial {trial_id}" if trial_id else "train"
+    bar = tqdm(loader, leave=False, desc=desc,
+               bar_format="{l_bar}{bar}| batch {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]")
     for images, labels in bar:
         images = images.to(device)
 
@@ -408,6 +415,12 @@ def train_func_distributed(config: dict):
 
     rank = ray.train.get_context().get_world_rank()
     world_size = ray.train.get_context().get_world_size()
+    if ray.train.get_context().get_world_rank() == 0:
+        _counter = ray.get_actor("trial_counter")
+        _trial_num = ray.get(_counter.next.remote())
+    else:
+        _trial_num = 0
+    trial_id = f"{_trial_num}/{config['n_trials']}" if _trial_num else ""
     set_seed(base_seed + rank)
     device = ray.train.torch.get_device()
 
@@ -446,7 +459,7 @@ def train_func_distributed(config: dict):
 
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
-                use_soft_labels=use_mixup_cutmix,
+                use_soft_labels=use_mixup_cutmix, trial_id=trial_id,
             )
             val_loss, val_acc, val_auroc = _evaluate_distributed(
                 model, val_loader, val_criterion, device, world_size,
@@ -475,6 +488,9 @@ def _tune_trial(config: dict):
     """Plain Ray Tune trainable. Each trial runs on one GPU (or CPU)."""
     data_path = Path(config["data"])
     device = get_device(config["device"])
+    _counter = ray.get_actor("trial_counter")
+    _trial_num = ray.get(_counter.next.remote())
+    trial_id = f"{_trial_num}/{config['n_trials']}"
     set_seed(config["seed"])
 
     epochs = config["epochs"]
@@ -519,7 +535,7 @@ def _tune_trial(config: dict):
 
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
-                use_soft_labels=use_mixup_cutmix,
+                use_soft_labels=use_mixup_cutmix, trial_id=trial_id,
             )
             _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
 
@@ -722,6 +738,7 @@ def run_tuning(args):
         "val_fraction": args.val_fraction,
         "num_classes": num_classes,
         "device": args.device,
+        "n_trials": args.n_trials,
         "lr":                    tune.loguniform(ss.get("lr_min", 1e-5),    ss.get("lr_max", 1e-1)),
         "weight_decay":          tune.loguniform(ss.get("wd_min", 1e-6),    ss.get("wd_max", 1e-2)),
         "label_smoothing":       tune.uniform(   ss.get("ls_min", 0.0),     ss.get("ls_max", 0.2)),
@@ -774,6 +791,8 @@ def run_tuning(args):
             points_to_evaluate=points_to_evaluate,
             evaluated_rewards=evaluated_rewards,
         )
+
+    TrialCounter.options(name="trial_counter", lifetime="detached", get_if_exists=True).remote()
 
     tuner = tune.Tuner(
         trainable,
