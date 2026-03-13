@@ -1,8 +1,8 @@
-name: skya
+name: skyb
 
 resources:
   cloud: aws
-  accelerators: T4:4          # 4× T4 = g4dn.12xlarge; change to A10G:4 for g5.12xlarge
+  accelerators: T4:1          # 1× T4 = g4dn.xlarge (testing); change to T4:4 for g4dn.12xlarge
   disk_size: 200
 
 envs:
@@ -20,14 +20,13 @@ file_mounts:
     source: s3://image.data/PC
     mode: COPY
 
-run: |
-  python -m pip install \
-    "numpy<2" \
-    "torch==2.3.1" "torchvision==0.18.1" \
-    timm \
-    "ray[tune,train]==2.9.3" "pyarrow==14.0.2" optuna \
-    scikit-learn pyyaml tqdm pillow awscli
+setup: |
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  source $HOME/.local/bin/env
+  uv venv ~/venv
+  uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
 
+run: |
   mkdir -p $OUTPUT_DIR
 
   RESUME_ARG=""
@@ -35,7 +34,7 @@ run: |
     RESUME_ARG="--resume $RESUME_PATH"
   fi
 
-  python ~/sky_workdir/runic.py \
+  ~/venv/bin/python ~/sky_workdir/runic.py \
     --data        $DATA_DIR \
     --model       $MODEL \
     --n_trials    $N_TRIALS \
@@ -48,4 +47,4 @@ run: |
   # Copy final results JSON back to S3
   aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/runic_results.json
 
-workdir: /home/ljubomir/github/tunic
+workdir: /home/ljubomir/github/runic
