@@ -267,13 +267,14 @@ def build_scheduler(optimizer, epochs: int, steps_per_epoch: int, warmup_epochs:
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
-def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels, trial_id=""):
+def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels, trial_id="", epoch=0, epochs=0):
     model.train()
     total_loss = 0.0
     correct = 0
     total = 0
 
-    desc = f"trial {trial_id}" if trial_id else "train"
+    epoch_str = f" epoch {epoch+1}/{epochs}" if epochs else ""
+    desc = f"trial {trial_id}{epoch_str}" if trial_id else f"train{epoch_str}"
     bar = tqdm(loader, leave=False, desc=desc,
                bar_format="{l_bar}{bar}| batch {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]")
     for images, labels in bar:
@@ -459,7 +460,7 @@ def train_func_distributed(config: dict):
 
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
-                use_soft_labels=use_mixup_cutmix, trial_id=trial_id,
+                use_soft_labels=use_mixup_cutmix, trial_id=trial_id, epoch=epoch, epochs=epochs,
             )
             val_loss, val_acc, val_auroc = _evaluate_distributed(
                 model, val_loader, val_criterion, device, world_size,
@@ -535,7 +536,7 @@ def _tune_trial(config: dict):
 
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
-                use_soft_labels=use_mixup_cutmix, trial_id=trial_id,
+                use_soft_labels=use_mixup_cutmix, trial_id=trial_id, epoch=epoch, epochs=epochs,
             )
             _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
 
@@ -614,7 +615,7 @@ def run_final(args):
 
         train_loss, train_acc = train_one_epoch(
             model, train_loader, optimizer, scheduler, criterion, device,
-            use_soft_labels=use_mixup_cutmix
+            use_soft_labels=use_mixup_cutmix, epoch=epoch, epochs=epochs
         )
         _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
 
