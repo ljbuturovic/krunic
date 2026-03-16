@@ -931,7 +931,13 @@ def main():
         logger.error("--data is required for tuning mode")
         sys.exit(1)
 
+    t0 = time.time()
     run_tuning(args)
+    elapsed = time.time() - t0
+    if elapsed < 600:
+        logger.info(f"Elapsed time: {elapsed:.1f}s")
+    else:
+        logger.info(f"Elapsed time: {elapsed/60:.1f}m")
 
 
 if __name__ == "__main__":
