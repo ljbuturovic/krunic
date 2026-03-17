@@ -38,11 +38,11 @@ run: |
     --n_trials    $N_TRIALS \
     --epochs      $EPOCHS \
     --output      $OUTPUT_DIR/runic_results.json \
-    --ray-storage s3://$BUCKET/ray-results \
+    --ray-storage s3://$BUCKET/ray-results/two_nodes \
     --device      auto \
     $RESUME_ARG
 
   # Copy final results JSON back to S3
-  ~/venv/bin/aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/runic_results.json
+  ~/venv/bin/aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/two_nodes/runic_results.json
 
 workdir: /home/ljubomir/github/runic
