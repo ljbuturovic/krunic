@@ -20,7 +20,7 @@ envs:
 setup: |
   curl -LsSf https://astral.sh/uv/install.sh | sh
   source $HOME/.local/bin/env
-  uv venv ~/venv
+  uv venv --clear ~/venv
   uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
   mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
 
