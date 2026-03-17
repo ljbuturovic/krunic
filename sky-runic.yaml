@@ -15,16 +15,12 @@ envs:
   EPOCHS: "30"
   RESUME_PATH: ""             # set via --env RESUME_PATH=s3://... to warm-start
 
-file_mounts:
-  /data/dataset:
-    source: s3://image.data/PC
-    mode: COPY
-
 setup: |
   curl -LsSf https://astral.sh/uv/install.sh | sh
   source $HOME/.local/bin/env
   uv venv ~/venv
   uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
+  mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
 
 run: |
   mkdir -p $OUTPUT_DIR

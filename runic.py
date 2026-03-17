@@ -706,6 +706,14 @@ def run_tuning(args):
         logger.error("Ray is not installed. Install with: pip install 'ray[tune,train]' optuna")
         sys.exit(1)
 
+    if not ray.is_initialized():
+        try:
+            ray.init(address="auto", ignore_reinit_error=True)
+            logger.info("Connected to existing Ray cluster")
+        except Exception:
+            ray.init(ignore_reinit_error=True)
+            logger.info("Started local Ray instance")
+
     data_path = Path(args.data)
     validate_dataset_path(data_path)
     set_seed(args.seed)
