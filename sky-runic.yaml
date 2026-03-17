@@ -11,7 +11,7 @@ envs:
   DATA_DIR: /data/dataset
   OUTPUT_DIR: /data/output
   MODEL: resnet50
-  N_TRIALS: "80"
+  N_TRIALS: "30"
   EPOCHS: "30"
   RESUME_PATH: ""             # set via --env RESUME_PATH=s3://... to warm-start
 
