@@ -707,12 +707,9 @@ def run_tuning(args):
         sys.exit(1)
 
     if not ray.is_initialized():
-        try:
-            ray.init(address="auto", ignore_reinit_error=True)
-            logger.info("Connected to existing Ray cluster")
-        except Exception:
-            ray.init(ignore_reinit_error=True)
-            logger.info("Started local Ray instance")
+        address = args.ray_address or None
+        ray.init(address=address, ignore_reinit_error=True)
+        logger.info(f"Ray initialized (address={address or 'local'})")
 
     data_path = Path(args.data)
     validate_dataset_path(data_path)
@@ -916,6 +913,8 @@ def parse_args():
                    help="Run end-to-end smoke test with synthetic data")
     p.add_argument("--num-train-workers", type=int, default=1, dest="num_train_workers",
                    help="Ray Train workers per trial (= GPUs per trial)")
+    p.add_argument("--ray-address", type=str, default=None, dest="ray_address",
+                   help="Ray cluster address to connect to (e.g. localhost:6385); defaults to local")
     p.add_argument("--ray-storage", type=str, default=None, dest="ray_storage",
                    help="Ray Tune storage path (local dir or S3 URI, e.g. s3://bucket/ray-results)")
     return p.parse_args()
