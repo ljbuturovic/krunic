@@ -39,20 +39,20 @@ run: |
       RESUME_ARG="--resume $RESUME_PATH"
     fi
 
-    ~/venv/bin/python ~/sky_workdir/runic.py \
+    ~/venv/bin/python ~/sky_workdir/tunic.py \
       --data        $DATA_DIR \
       --model       $MODEL \
       --n_trials    $N_TRIALS \
       --epochs      $EPOCHS \
-      --output      $OUTPUT_DIR/runic_results.json \
+      --output      $OUTPUT_DIR/tunic_results.json \
       --ray-storage s3://$BUCKET/ray-results/two_nodes \
       --ray-address localhost:$RAY_PORT \
       --device      auto \
       $RESUME_ARG
 
-    ~/venv/bin/aws s3 cp $OUTPUT_DIR/runic_results.json s3://$BUCKET/ray-results/two_nodes/runic_results.json
+    ~/venv/bin/aws s3 cp $OUTPUT_DIR/tunic_results.json s3://$BUCKET/ray-results/two_nodes/tunic_results.json
   else
     ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block
   fi
 
-workdir: /home/ljubomir/github/runic
+workdir: /home/ljubomir/github/tunic
