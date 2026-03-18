@@ -8,8 +8,8 @@ resources:
 envs:
   BUCKET: image.data          # your S3 bucket name
   DATASET_S3: PC              # path inside bucket for the dataset
-  DATA_DIR: /data/dataset
-  OUTPUT_DIR: /data/output
+  DATA_DIR: /home/ubuntu/data/dataset
+  OUTPUT_DIR: /home/ubuntu/data/output
   MODEL: resnet50
   N_TRIALS: "30"
   EPOCHS: "30"
