@@ -131,6 +131,8 @@ def launch(args, yaml_path: Path):
         cluster_name=args.cluster,
         idle_minutes_to_autostop=None if args.no_autostop else args.idle_minutes,
         retry_until_up=args.spot,
+        stream_logs=True,
+        detach_run=False,
     )
 
 
