@@ -55,7 +55,7 @@ def build_yaml(args) -> dict:
         "N_TRIALS":    str(args.n_trials),
         "EPOCHS":      str(args.n_epochs),
         "PREFIX":      args.prefix,
-        "RESUME_S3":   resume_s3,
+        "RAY_RESULTS": resume_s3,
     }
 
     setup = (
@@ -76,23 +76,17 @@ def build_yaml(args) -> dict:
         "\n"
         "  mkdir -p $OUTPUT_DIR\n"
         "\n"
-        "  RESUME_ARG=\"\"\n"
-        "  if ~/venv/bin/aws s3 ls $RESUME_S3/ > /dev/null 2>&1; then\n"
-        "    RESUME_ARG=\"--resume $RESUME_S3\"\n"
-        "  fi\n"
-        "\n"
         "  ~/venv/bin/python ~/sky_workdir/tunic.py \\\n"
         "    --data        $DATA_DIR \\\n"
         "    --model       $MODEL \\\n"
         "    --n_trials    $N_TRIALS \\\n"
         "    --epochs      $EPOCHS \\\n"
         "    --output      $OUTPUT_DIR/${PREFIX}_results.json \\\n"
-        "    --ray-storage $RESUME_S3 \\\n"
+        "    --ray-storage $RAY_RESULTS \\\n"
         "    --ray-address localhost:$RAY_PORT \\\n"
-        "    --device      auto \\\n"
-        "    $RESUME_ARG\n"
+        "    --device      auto\n"
         "\n"
-        "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RESUME_S3/${PREFIX}_results.json\n"
+        "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json\n"
         "else\n"
         "  ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block\n"
         "fi\n"
@@ -131,8 +125,6 @@ def launch(args, yaml_path: Path):
         cluster_name=args.cluster,
         idle_minutes_to_autostop=None if args.no_autostop else args.idle_minutes,
         retry_until_up=args.spot,
-        stream_logs=True,
-        detach_run=False,
     )
 
 
