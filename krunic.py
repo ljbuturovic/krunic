@@ -65,6 +65,7 @@ def build_yaml(args) -> dict:
         "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli\n"
         "mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR\n"
         "sudo snap install nvtop\n"
+        "sudo snap install btop\n"
     )
 
     run = (
