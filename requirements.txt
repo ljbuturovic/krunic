@@ -35,9 +35,19 @@ attrs==25.4.0
     #   aiohttp
     #   jsonschema
     #   referencing
+awscli==1.44.62
+    # via skypilot
 bcrypt==4.0.1
     # via
     #   paramiko
+    #   skypilot
+boto3==1.42.72
+    # via skypilot
+botocore==1.42.72
+    # via
+    #   awscli
+    #   boto3
+    #   s3transfer
     #   skypilot
 bracex==2.6
     # via wcmatch
@@ -64,6 +74,7 @@ click==8.1.8
     #   uvicorn
 colorama==0.4.6
     # via
+    #   awscli
     #   click
     #   colorlog
     #   skypilot
@@ -76,6 +87,8 @@ cryptography==46.0.5
     #   paramiko
     #   skypilot
     #   types-paramiko
+docutils==0.19
+    # via awscli
 fastapi==0.135.1
     # via skypilot
 filelock==3.25.2
@@ -103,6 +116,8 @@ greenlet==3.3.2
     # via
     #   skypilot
     #   sqlalchemy
+grpcio==1.78.0
+    # via skypilot
 h11==0.16.0
     # via
     #   httpcore
@@ -135,6 +150,10 @@ jinja2==3.1.6
     # via
     #   skypilot
     #   torch
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
 joblib==1.5.3
     # via scikit-learn
 jsonschema==4.26.0
@@ -261,9 +280,10 @@ propcache==0.4.1
     # via
     #   aiohttp
     #   yarl
-protobuf==7.34.0
+protobuf==6.33.6
     # via
     #   ray
+    #   skypilot
     #   tensorboardx
 psutil==7.2.2
     # via skypilot
@@ -273,6 +293,8 @@ pulp==3.3.0
     # via skypilot
 pyarrow==23.0.1
     # via ray
+pyasn1==0.6.3
+    # via rsa
 pycasbin==2.8.0
     # via sqlalchemy-adapter
 pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
@@ -292,6 +314,7 @@ pynacl==1.6.2
     # via paramiko
 python-dateutil==2.9.0.post0
     # via
+    #   botocore
     #   pandas
     #   pendulum
 python-dotenv==1.2.2
@@ -302,6 +325,7 @@ python-multipart==0.0.22
     # via skypilot
 pyyaml==6.0.3
     # via
+    #   awscli
     #   huggingface-hub
     #   optuna
     #   ray
@@ -326,6 +350,12 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
+rsa==4.7.2
+    # via awscli
+s3transfer==0.16.0
+    # via
+    #   awscli
+    #   boto3
 safetensors==0.7.0
     # via timm
 scikit-image==0.26.0
@@ -408,6 +438,7 @@ typing-extensions==4.15.0
     #   alembic
     #   anyio
     #   fastapi
+    #   grpcio
     #   huggingface-hub
     #   pydantic
     #   pydantic-core
@@ -426,7 +457,9 @@ tzdata==2025.3
     #   pandas
     #   pendulum
 urllib3==2.6.3
-    # via requests
+    # via
+    #   botocore
+    #   requests
 uvicorn==0.35.0
     # via skypilot
 uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
