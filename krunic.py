@@ -26,7 +26,7 @@ def parse_args():
         description="krunic — launch tunic.py on a SkyPilot cluster",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--cluster",       type=str, default="skyb",                       dest="cluster",       help="SkyPilot cluster name")
+    p.add_argument("--cluster",       type=str, required=True,                        dest="cluster",       help="SkyPilot cluster name")
     p.add_argument("--cloud",         type=str, default="aws",                        dest="cloud",         help="Cloud provider")
     p.add_argument("--accelerator",   type=str, default="T4:4",                       dest="accelerator",   help="Accelerator spec (e.g. T4:4, A10G:1)")
     p.add_argument("--num-nodes",     type=int, default=1,                            dest="num_nodes",     help="Number of cluster nodes")
@@ -37,7 +37,7 @@ def parse_args():
     p.add_argument("--model",         type=str, default="resnet50",                   dest="model",         help="timm model name")
     p.add_argument("--n-trials",      type=int, default=30,                           dest="n_trials",      help="Number of Optuna trials")
     p.add_argument("--n-epochs",      type=int, default=30,                           dest="n_epochs",      help="Training epochs per trial")
-    p.add_argument("--s3-path",       type=str, default="PC",                         dest="s3_path",       help="Dataset path inside S3 bucket")
+    p.add_argument("--s3-path",       type=str, required=True,                        dest="s3_path",       help="Dataset path inside S3 bucket")
     p.add_argument("--prefix",        type=str, default="tunic",                      dest="prefix",        help="Prefix for output files and S3 paths")
     p.add_argument("--idle-minutes",  type=int, default=60,                           dest="idle_minutes",  help="Auto-stop cluster after N idle minutes")
     p.add_argument("--no-autostop",   action="store_true",                            dest="no_autostop",   help="Disable auto-stop; cluster stays up after job finishes")
