@@ -4,9 +4,21 @@
 import argparse
 import os
 import sys
+import textwrap
 from pathlib import Path
 
 import yaml
+
+
+class _LiteralStr(str):
+    pass
+
+
+def _literal_representer(dumper, data):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+
+
+yaml.add_representer(_LiteralStr, _literal_representer)
 
 
 def parse_args():
@@ -58,41 +70,41 @@ def build_yaml(args) -> dict:
         "RAY_RESULTS": resume_s3,
     }
 
-    setup = (
-        "curl -LsSf https://astral.sh/uv/install.sh | sh\n"
-        "source $HOME/.local/bin/env\n"
-        "uv venv --clear ~/venv\n"
-        "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli\n"
-        "mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR\n"
-        "sudo snap install nvtop\n"
-        "sudo snap install btop\n"
-    )
+    setup = _LiteralStr(textwrap.dedent("""\
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        source $HOME/.local/bin/env
+        uv venv --clear ~/venv
+        uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
+        mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
+        sudo snap install nvtop
+        sudo snap install btop
+    """))
 
-    run = (
-        "RAY_PORT=6385\n"
-        "HEAD_IP=$(echo \"$SKYPILOT_NODE_IPS\" | head -1)\n"
-        "\n"
-        "if [ \"$SKYPILOT_NODE_RANK\" -eq 0 ]; then\n"
-        "  ~/venv/bin/ray start --head --port=$RAY_PORT\n"
-        "  sleep 10\n"
-        "\n"
-        "  mkdir -p $OUTPUT_DIR\n"
-        "\n"
-        "  ~/venv/bin/python ~/sky_workdir/tunic.py \\\n"
-        "    --data        $DATA_DIR \\\n"
-        "    --model       $MODEL \\\n"
-        "    --n_trials    $N_TRIALS \\\n"
-        "    --epochs      $EPOCHS \\\n"
-        "    --output      $OUTPUT_DIR/${PREFIX}_results.json \\\n"
-        "    --ray-storage $RAY_RESULTS \\\n"
-        "    --ray-address localhost:$RAY_PORT \\\n"
-        "    --device      auto\n"
-        "\n"
-        "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json\n"
-        "else\n"
-        "  ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block\n"
-        "fi\n"
-    )
+    run = _LiteralStr(textwrap.dedent("""\
+        RAY_PORT=6385
+        HEAD_IP=$(echo "$SKYPILOT_NODE_IPS" | head -1)
+
+        if [ "$SKYPILOT_NODE_RANK" -eq 0 ]; then
+          ~/venv/bin/ray start --head --port=$RAY_PORT
+          sleep 10
+
+          mkdir -p $OUTPUT_DIR
+
+          ~/venv/bin/python ~/sky_workdir/tunic.py \\
+            --data        $DATA_DIR \\
+            --model       $MODEL \\
+            --n_trials    $N_TRIALS \\
+            --epochs      $EPOCHS \\
+            --output      $OUTPUT_DIR/${PREFIX}_results.json \\
+            --ray-storage $RAY_RESULTS \\
+            --ray-address localhost:$RAY_PORT \\
+            --device      auto
+
+          ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json
+        else
+          ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block
+        fi
+    """))
 
     return {
         "name": args.cluster,
