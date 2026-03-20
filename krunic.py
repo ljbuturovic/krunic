@@ -39,6 +39,7 @@ def parse_args():
     p.add_argument("--n-epochs",      type=int, default=30,                           dest="n_epochs",      help="Training epochs per trial")
     p.add_argument("--s3-path",       type=str, required=True,                        dest="s3_path",       help="Dataset path inside S3 bucket")
     p.add_argument("--prefix",        type=str, default="tunic",                      dest="prefix",        help="Prefix for output files and S3 paths")
+    p.add_argument("--training-fraction", type=float, default=1.0,                   dest="training_fraction", help="Fraction of training data to use (e.g. 0.1 for 10%%); same subset across all trials")
     p.add_argument("--idle-minutes",  type=int, default=60,                           dest="idle_minutes",  help="Auto-stop cluster after N idle minutes")
     p.add_argument("--no-autostop",   action="store_true",                            dest="no_autostop",   help="Disable auto-stop; cluster stays up after job finishes")
     return p.parse_args()
@@ -66,8 +67,9 @@ def build_yaml(args) -> dict:
         "MODEL":       args.model,
         "N_TRIALS":    str(args.n_trials),
         "EPOCHS":      str(args.n_epochs),
-        "PREFIX":      args.prefix,
-        "RAY_RESULTS": resume_s3,
+        "PREFIX":             args.prefix,
+        "RAY_RESULTS":        resume_s3,
+        "TRAINING_FRACTION":  str(args.training_fraction),
     }
 
     setup = _LiteralStr(textwrap.dedent("""\
@@ -75,7 +77,26 @@ def build_yaml(args) -> dict:
         source $HOME/.local/bin/env
         uv venv --clear ~/venv
         uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
-        mkdir -p $DATA_DIR && ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
+        mkdir -p $DATA_DIR
+        if awk "BEGIN{exit !($TRAINING_FRACTION < 1.0)}"; then
+          for split in train val test; do
+            CLASSES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/ 2>/dev/null | awk '/PRE/{print $2}' | sed 's|/$||')
+            [ -z "$CLASSES" ] && continue
+            while IFS= read -r cls; do
+              FILES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/$cls/ 2>/dev/null | awk '!/PRE/{print $4}')
+              [ -z "$FILES" ] && continue
+              NFILES=$(echo "$FILES" | wc -l)
+              NTAKE=$(awk "BEGIN{n=int($NFILES * $TRAINING_FRACTION); print (n<1)?1:n}")
+              mkdir -p "$DATA_DIR/$split/$cls"
+              echo "$FILES" | shuf | head -n "$NTAKE" | \
+                xargs -P 8 -I{} ~/venv/bin/aws s3 cp \
+                  "s3://$BUCKET/$DATASET_S3/$split/$cls/{}" \
+                  "$DATA_DIR/$split/$cls/{}" --quiet
+            done <<< "$CLASSES"
+          done
+        else
+          ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
+        fi
         sudo snap install nvtop
         sudo snap install btop
     """))
