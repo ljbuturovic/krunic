@@ -122,12 +122,13 @@ def launch(args, yaml_path: Path):
 
     task = sky.Task.from_yaml(str(yaml_path))
     print(f"Launching cluster '{args.cluster}' ({args.num_nodes}x {args.accelerator} on {args.cloud}{'  [spot]' if args.spot else ''})...")
-    sky.launch(
+    request_id = sky.launch(
         task,
         cluster_name=args.cluster,
         idle_minutes_to_autostop=None if args.no_autostop else args.idle_minutes,
         retry_until_up=args.spot,
     )
+    sky.stream_and_get(request_id)
 
 
 def main():
