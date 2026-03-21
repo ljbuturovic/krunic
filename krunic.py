@@ -88,10 +88,24 @@ def build_yaml(args) -> dict:
               NFILES=$(echo "$FILES" | wc -l)
               NTAKE=$(awk "BEGIN{n=int($NFILES * $TRAINING_FRACTION); print (n<1)?1:n}")
               mkdir -p "$DATA_DIR/$split/$cls"
+              echo "  [$split/$cls] copying $NTAKE / $NFILES files..."
+              (
+                while true; do
+                  DONE=$(find "$DATA_DIR/$split/$cls" -type f 2>/dev/null | wc -l)
+                  PCT=$(awk -v done="$DONE" -v ntake="$NTAKE" 'BEGIN{printf "%.0f", (done/ntake)*100}')
+                  echo "  [$split/$cls] downloaded $DONE / $NTAKE (${PCT}%)"
+                  [ "$DONE" -ge "$NTAKE" ] && break
+                  sleep 5
+                done
+              ) &
+              PROGRESS_PID=$!
               echo "$FILES" | shuf | head -n "$NTAKE" | \
                 xargs -P 8 -I{} ~/venv/bin/aws s3 cp \
                   "s3://$BUCKET/$DATASET_S3/$split/$cls/{}" \
                   "$DATA_DIR/$split/$cls/{}" --quiet
+              kill $PROGRESS_PID 2>/dev/null
+              wait $PROGRESS_PID 2>/dev/null
+              echo "  [$split/$cls] done ($NTAKE files)"
             done <<< "$CLASSES"
           done
         else
