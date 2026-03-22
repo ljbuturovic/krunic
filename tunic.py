@@ -80,10 +80,105 @@ def validate_dataset_path(data_path: Path):
     if not data_path.exists():
         logger.error(f"Dataset path does not exist: {data_path}")
         sys.exit(1)
-    train_dir = data_path / "train"
-    if not train_dir.exists():
-        logger.error(f"Expected a 'train/' subdirectory in {data_path}")
+    if not (data_path / "train").exists() and not (data_path / "wds" / "train").exists():
+        logger.error(f"Expected a 'train/' or 'wds/train/' subdirectory in {data_path}")
         sys.exit(1)
+
+
+def _detect_format(data_root: str) -> str:
+    """Return 'webdataset' or 'imagefolder' based on what's present at data_root."""
+    if data_root.startswith("s3://"):
+        return "webdataset"
+    p = Path(data_root)
+    if (p / "wds" / "dataset_info.json").exists():
+        return "webdataset"
+    return "imagefolder"
+
+
+def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
+                        train_tf, val_tf, collate_fn=None,
+                        training_fraction: float = 1.0, val_fraction: float = 1.0):
+    """Build train/val DataLoaders from WebDataset TAR shards (local or s3://)."""
+    try:
+        import webdataset as wds
+    except ImportError:
+        logger.error("webdataset not installed. Run: pip install webdataset")
+        sys.exit(1)
+
+    is_s3 = data_root.startswith("s3://")
+    if is_s3:
+        import subprocess
+        info_url = data_root.rstrip("/") + "/wds/dataset_info.json"
+        r = subprocess.run(["aws", "s3", "cp", info_url, "-"],
+                           capture_output=True, text=True, check=True)
+        meta = json.loads(r.stdout)
+    else:
+        with open(Path(data_root) / "wds" / "dataset_info.json") as f:
+            meta = json.load(f)
+
+    classes = meta["classes"]
+    class_to_idx = {c: i for i, c in enumerate(classes)}
+    num_classes = len(classes)
+
+    def shard_urls(split):
+        n = meta["splits"][split]["num_shards"]
+        if is_s3:
+            base = data_root.rstrip("/")
+            return [f"pipe:aws s3 cp {base}/wds/{split}/shard-{i:06d}.tar -" for i in range(n)]
+        d = Path(data_root) / "wds" / split
+        return [str(d / f"shard-{i:06d}.tar") for i in range(n)]
+
+    def decode_cls(b):
+        return class_to_idx[b.decode().strip()]
+
+    # webdataset >= 1.0 includes basichandlers in imagehandler, which maps
+    # ".cls" -> int(data). Our .cls files store class name strings, so we
+    # must intercept them before the built-in handler converts them to int.
+    _img_decoder = wds.autodecode.imagehandler("pil")
+
+    def _decoder(key, data):
+        if key.endswith(".cls"):
+            return data  # keep as raw bytes for decode_cls
+        return _img_decoder(key, data)
+
+    def make_loader(split, tf, is_train, fraction=1.0):
+        urls = shard_urls(split)
+        n_samples = meta["splits"][split]["num_samples"]
+        n_take = max(batch_size, int(n_samples * fraction))
+        if is_train:
+            n_take = (n_take // batch_size) * batch_size  # trim to full batches
+
+        # .slice() applies per worker, so divide n_take by the number of
+        # active workers (shards are distributed round-robin, so workers
+        # with no shards produce nothing; cap effective_workers by shard count).
+        effective_workers = min(workers, len(urls)) if workers > 0 else 1
+        slice_per_worker = max(batch_size, n_take // effective_workers)
+
+        def apply_tf(img):
+            return tf(img.convert("RGB"))
+
+        dataset = (
+            wds.WebDataset(urls, shardshuffle=is_train, seed=seed,
+                           nodesplitter=wds.split_by_node, empty_check=False)
+            .shuffle(1000 if is_train else 0)
+            .decode(_decoder)
+            .to_tuple("png", "cls")
+            .map_tuple(apply_tf, decode_cls)
+            .slice(slice_per_worker)
+            .with_length(n_take)
+        )
+        return DataLoader(dataset, batch_size=batch_size, num_workers=workers,
+                          pin_memory=False,
+                          collate_fn=collate_fn if is_train else None)
+
+    train_loader = make_loader("train", train_tf, is_train=True,  fraction=training_fraction)
+    if "val" in meta.get("splits", {}):
+        val_loader = make_loader("val",   val_tf,   is_train=False, fraction=val_fraction)
+    else:
+        logger.warning("No 'val' split in WebDataset — using 20%% of train as val")
+        val_loader = make_loader("train", val_tf,   is_train=False, fraction=0.2)
+
+    return train_loader, val_loader, num_classes
 
 
 def build_transforms(img_size: int, randaug_magnitude: int = 0, randaug_num_ops: int = 2, is_train: bool = True):
@@ -487,7 +582,9 @@ def train_func_distributed(config: dict):
 
 def _tune_trial(config: dict):
     """Plain Ray Tune trainable. Each trial runs on one GPU (or CPU)."""
-    data_path = Path(config["data"])
+    data_root   = config["data"]
+    data_format = config.get("data_format", "imagefolder")
+    data_path   = Path(data_root) if data_format == "imagefolder" else None
     device = get_device(config["device"])
     _counter = ray.get_actor("trial_counter")
     _trial_num = ray.get(_counter.next.remote())
@@ -511,11 +608,15 @@ def _tune_trial(config: dict):
 
     train_tf = build_transforms(config["img_size"], randaug_magnitude, randaug_num_ops, is_train=True)
     val_tf = build_transforms(config["img_size"], is_train=False)
-    train_loader, val_loader, _ = _build_loaders(
-        data_path, config["batch_size"], config["dataloader_workers"], config["seed"],
-        train_tf, val_tf, collate_fn,
-        training_fraction=config["training_fraction"], val_fraction=config["val_fraction"],
-    )
+    bs, workers, seed = config["batch_size"], config["dataloader_workers"], config["seed"]
+    tf = config["training_fraction"]
+    vf = config["val_fraction"]
+    if data_format == "webdataset":
+        train_loader, val_loader, _ = _build_wds_loaders(
+            data_root, bs, workers, seed, train_tf, val_tf, collate_fn, tf, vf)
+    else:
+        train_loader, val_loader, _ = _build_loaders(
+            data_path, bs, workers, seed, train_tf, val_tf, collate_fn, tf, vf)
 
     try:
         model = create_model(config["model"], num_classes, config["pretrained"], drop_rate)
@@ -711,14 +812,25 @@ def run_tuning(args):
         ray.init(address=address, ignore_reinit_error=True)
         logger.info(f"Ray initialized (address={address or 'local'})")
 
-    data_path = Path(args.data)
-    validate_dataset_path(data_path)
+    data_root   = args.data
+    data_format = _detect_format(data_root)
     set_seed(args.seed)
 
-    train_dir = data_path / "train"
-    tmp_ds = datasets.ImageFolder(str(train_dir))
-    num_classes = len(tmp_ds.classes)
-    logger.info(f"Dataset: {data_path} | Classes: {num_classes} | Model: {args.model}")
+    if data_format == "webdataset":
+        if not data_root.startswith("s3://"):
+            validate_dataset_path(Path(data_root))
+        with open(Path(data_root) / "wds" / "dataset_info.json") as f:
+            wds_meta = json.load(f)
+        num_classes = len(wds_meta["classes"])
+        data_key = data_root
+    else:
+        data_path = Path(data_root)
+        validate_dataset_path(data_path)
+        tmp_ds = datasets.ImageFolder(str(data_path / "train"))
+        num_classes = len(tmp_ds.classes)
+        data_key = str(data_path.resolve())
+
+    logger.info(f"Dataset: {data_root} | Format: {data_format} | Classes: {num_classes} | Model: {args.model}")
 
     ss = {}
     if args.search_space:
@@ -731,7 +843,8 @@ def run_tuning(args):
     use_gpu = args.device != "cpu"
 
     search_space = {
-        "data": str(data_path.resolve()),
+        "data": data_key,
+        "data_format": data_format,
         "model": args.model,
         "pretrained": args.pretrained,
         "epochs": args.epochs,
@@ -845,7 +958,7 @@ def run_tuning(args):
         "best_val_auroc": best_val_auroc,
         "best_params": best_params,
         "model": args.model,
-        "dataset": str(data_path.resolve()),
+        "dataset": data_key,
         "num_classes": num_classes,
         "n_trials": args.n_trials,
         "epochs": args.epochs,

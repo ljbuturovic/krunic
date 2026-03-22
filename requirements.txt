@@ -49,6 +49,8 @@ botocore==1.42.72
     #   boto3
     #   s3transfer
     #   skypilot
+braceexpand==0.1.7
+    # via webdataset
 bracex==2.6
     # via wcmatch
 cachetools==7.0.5
@@ -202,6 +204,7 @@ numpy==2.4.3
     #   tifffile
     #   torchvision
     #   tunic
+    #   webdataset
 nvidia-cublas-cu12==12.8.4.1 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via
     #   nvidia-cudnn-cu12
@@ -333,6 +336,7 @@ pyyaml==6.0.3
     #   skypilot
     #   timm
     #   uvicorn
+    #   webdataset
 ray==2.54.0
     # via tunic
 referencing==0.37.0
@@ -471,6 +475,8 @@ wcmatch==10.1
     # via pycasbin
 wcwidth==0.6.0
     # via prettytable
+webdataset==1.0.2
+    # via tunic
 websockets==16.0
     # via uvicorn
 wheel==0.46.3
