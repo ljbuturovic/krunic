@@ -9,6 +9,7 @@ dependencies = [
     "medmnist>=3.0.2",
     "numpy>=2.4.3",
     "optuna>=4.7.0",
+    "pillow>=12.1.1",
     "ray[train,tune]>=2.54.0",
     "scikit-learn>=1.8.0",
     "skypilot[aws]>=0.11.2",

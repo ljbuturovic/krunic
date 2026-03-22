@@ -270,6 +270,7 @@ pillow==12.1.1
     #   medmnist
     #   scikit-image
     #   torchvision
+    #   tunic
 pip==26.0.1
     # via skypilot
 prettytable==3.17.0

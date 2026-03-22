@@ -41,6 +41,7 @@ def parse_args():
     p.add_argument("--prefix",        type=str, default="tunic",                      dest="prefix",        help="Prefix for output files and S3 paths")
     p.add_argument("--training-fraction", type=float, default=1.0,                   dest="training_fraction", help="Fraction of training data to use (e.g. 0.1 for 10%%); same subset across all trials")
     p.add_argument("--idle-minutes",  type=int, default=60,                           dest="idle_minutes",  help="Auto-stop cluster after N idle minutes")
+    p.add_argument("--copy",          action="store_true",                            dest="copy",          help="Copy data from S3 to local disk instead of mounting (slower setup, faster training)")
     p.add_argument("--no-autostop",   action="store_true",                            dest="no_autostop",   help="Disable auto-stop; cluster stays up after job finishes")
     return p.parse_args()
 
@@ -59,89 +60,109 @@ def build_yaml(args) -> dict:
 
     resume_s3 = f"s3://{args.bucket}/ray-results/{args.prefix}"
 
+    _MOUNT_POINT = "/home/ubuntu/s3mount"
+    if not args.copy:
+        data_dir = f"{_MOUNT_POINT}/{args.s3_path}"
+    else:
+        data_dir = "/home/ubuntu/data/dataset"
+
     envs = {
-        "BUCKET":      args.bucket,
-        "DATASET_S3":  args.s3_path,
-        "DATA_DIR":    "/home/ubuntu/data/dataset",
-        "OUTPUT_DIR":  "/home/ubuntu/data/output",
-        "MODEL":       args.model,
-        "N_TRIALS":    str(args.n_trials),
-        "EPOCHS":      str(args.n_epochs),
+        "BUCKET":             args.bucket,
+        "DATASET_S3":         args.s3_path,
+        "DATA_DIR":           data_dir,
+        "OUTPUT_DIR":         "/home/ubuntu/data/output",
+        "MODEL":              args.model,
+        "N_TRIALS":           str(args.n_trials),
+        "EPOCHS":             str(args.n_epochs),
         "PREFIX":             args.prefix,
         "RAY_RESULTS":        resume_s3,
         "TRAINING_FRACTION":  str(args.training_fraction),
     }
 
-    setup = _LiteralStr(textwrap.dedent("""\
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        source $HOME/.local/bin/env
-        uv venv --clear ~/venv
-        uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli
-        mkdir -p $DATA_DIR
-        if awk "BEGIN{exit !($TRAINING_FRACTION < 1.0)}"; then
-          for split in train val test; do
-            CLASSES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/ 2>/dev/null | awk '/PRE/{print $2}' | sed 's|/$||')
-            [ -z "$CLASSES" ] && continue
-            while IFS= read -r cls; do
-              FILES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/$cls/ 2>/dev/null | awk '!/PRE/{print $4}')
-              [ -z "$FILES" ] && continue
-              NFILES=$(echo "$FILES" | wc -l)
-              NTAKE=$(awk "BEGIN{n=int($NFILES * $TRAINING_FRACTION); print (n<1)?1:n}")
-              mkdir -p "$DATA_DIR/$split/$cls"
-              echo "  [$split/$cls] copying $NTAKE / $NFILES files..."
-              (
-                while true; do
-                  DONE=$(find "$DATA_DIR/$split/$cls" -type f 2>/dev/null | wc -l)
-                  PCT=$(awk -v done="$DONE" -v ntake="$NTAKE" 'BEGIN{printf "%.0f", (done/ntake)*100}')
-                  echo "  [$split/$cls] downloaded $DONE / $NTAKE (${PCT}%)"
-                  [ "$DONE" -ge "$NTAKE" ] && break
-                  sleep 5
-                done
-              ) &
-              PROGRESS_PID=$!
-              echo "$FILES" | shuf | head -n "$NTAKE" | \
-                xargs -P 8 -I{} ~/venv/bin/aws s3 cp \
-                  "s3://$BUCKET/$DATASET_S3/$split/$cls/{}" \
-                  "$DATA_DIR/$split/$cls/{}" --quiet
-              kill $PROGRESS_PID 2>/dev/null
-              wait $PROGRESS_PID 2>/dev/null
-              echo "  [$split/$cls] done ($NTAKE files)"
-            done <<< "$CLASSES"
-          done
-        else
-          ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR
-        fi
-        sudo snap install nvtop
-        sudo snap install btop
-    """))
+    _setup_start = (
+        "curl -LsSf https://astral.sh/uv/install.sh | sh\n"
+        "source $HOME/.local/bin/env\n"
+        "uv venv --clear ~/venv\n"
+        "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli\n"
+    )
+    _setup_s3_copy = (
+        "mkdir -p $DATA_DIR\n"
+        "if awk \"BEGIN{exit !($TRAINING_FRACTION < 1.0)}\"; then\n"
+        "  for split in train val test; do\n"
+        "    CLASSES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/ 2>/dev/null | awk '/PRE/{print $2}' | sed 's|/$||')\n"
+        "    [ -z \"$CLASSES\" ] && continue\n"
+        "    while IFS= read -r cls; do\n"
+        "      FILES=$(~/venv/bin/aws s3 ls s3://$BUCKET/$DATASET_S3/$split/$cls/ 2>/dev/null | awk '!/PRE/{print $4}')\n"
+        "      [ -z \"$FILES\" ] && continue\n"
+        "      NFILES=$(echo \"$FILES\" | wc -l)\n"
+        "      NTAKE=$(awk \"BEGIN{n=int($NFILES * $TRAINING_FRACTION); print (n<1)?1:n}\")\n"
+        "      mkdir -p \"$DATA_DIR/$split/$cls\"\n"
+        "      echo \"  [$split/$cls] copying $NTAKE / $NFILES files...\"\n"
+        "      (\n"
+        "        while true; do\n"
+        "          DONE=$(find \"$DATA_DIR/$split/$cls\" -type f 2>/dev/null | wc -l)\n"
+        "          PCT=$(awk -v done=\"$DONE\" -v ntake=\"$NTAKE\" 'BEGIN{printf \"%.0f\", (done/ntake)*100}')\n"
+        "          echo \"  [$split/$cls] downloaded $DONE / $NTAKE (${PCT}%)\"\n"
+        "          [ \"$DONE\" -ge \"$NTAKE\" ] && break\n"
+        "          sleep 5\n"
+        "        done\n"
+        "      ) &\n"
+        "      PROGRESS_PID=$!\n"
+        "      echo \"$FILES\" | shuf | head -n \"$NTAKE\" | \\\n"
+        "        xargs -P 8 -I{} ~/venv/bin/aws s3 cp \\\n"
+        "          \"s3://$BUCKET/$DATASET_S3/$split/$cls/{}\" \\\n"
+        "          \"$DATA_DIR/$split/$cls/{}\" --quiet\n"
+        "      kill $PROGRESS_PID 2>/dev/null\n"
+        "      wait $PROGRESS_PID 2>/dev/null\n"
+        "      echo \"  [$split/$cls] done ($NTAKE files)\"\n"
+        "    done <<< \"$CLASSES\"\n"
+        "  done\n"
+        "else\n"
+        "  ~/venv/bin/aws s3 sync s3://$BUCKET/$DATASET_S3 $DATA_DIR\n"
+        "fi\n"
+    )
+    _setup_end = (
+        "sudo snap install nvtop\n"
+        "sudo snap install btop\n"
+    )
 
-    run = _LiteralStr(textwrap.dedent("""\
-        RAY_PORT=6385
-        HEAD_IP=$(echo "$SKYPILOT_NODE_IPS" | head -1)
+    if not args.copy:
+        setup = _LiteralStr(_setup_start + _setup_end)
+    else:
+        setup = _LiteralStr(_setup_start + _setup_s3_copy + _setup_end)
 
-        if [ "$SKYPILOT_NODE_RANK" -eq 0 ]; then
-          ~/venv/bin/ray start --head --port=$RAY_PORT
-          sleep 10
+    _training_fraction_arg = (
+        "            --training_fraction $TRAINING_FRACTION \\\n"
+        if not args.copy else ""
+    )
+    run = _LiteralStr(
+        "RAY_PORT=6385\n"
+        "HEAD_IP=$(echo \"$SKYPILOT_NODE_IPS\" | head -1)\n"
+        "\n"
+        "if [ \"$SKYPILOT_NODE_RANK\" -eq 0 ]; then\n"
+        "  ~/venv/bin/ray start --head --port=$RAY_PORT\n"
+        "  sleep 10\n"
+        "\n"
+        "  mkdir -p $OUTPUT_DIR\n"
+        "\n"
+        "  ~/venv/bin/python ~/sky_workdir/tunic.py \\\n"
+        "    --data        $DATA_DIR \\\n"
+        "    --model       $MODEL \\\n"
+        "    --n_trials    $N_TRIALS \\\n"
+        "    --epochs      $EPOCHS \\\n"
+        "    --output      $OUTPUT_DIR/${PREFIX}_results.json \\\n"
+        "    --ray-storage $RAY_RESULTS \\\n"
+        "    --ray-address localhost:$RAY_PORT \\\n"
+        + _training_fraction_arg +
+        "    --device      auto\n"
+        "\n"
+        "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json\n"
+        "else\n"
+        "  ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block\n"
+        "fi\n"
+    )
 
-          mkdir -p $OUTPUT_DIR
-
-          ~/venv/bin/python ~/sky_workdir/tunic.py \\
-            --data        $DATA_DIR \\
-            --model       $MODEL \\
-            --n_trials    $N_TRIALS \\
-            --epochs      $EPOCHS \\
-            --output      $OUTPUT_DIR/${PREFIX}_results.json \\
-            --ray-storage $RAY_RESULTS \\
-            --ray-address localhost:$RAY_PORT \\
-            --device      auto
-
-          ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json
-        else
-          ~/venv/bin/ray start --address=$HEAD_IP:$RAY_PORT --block
-        fi
-    """))
-
-    return {
+    result = {
         "name": args.cluster,
         "num_nodes": args.num_nodes,
         "resources": resources,
@@ -150,6 +171,14 @@ def build_yaml(args) -> dict:
         "run": run,
         "workdir": workdir,
     }
+    if not args.copy:
+        result["file_mounts"] = {
+            _MOUNT_POINT: {
+                "source": f"s3://{args.bucket}",
+                "mode": "MOUNT",
+            }
+        }
+    return result
 
 
 def save_yaml(args, data: dict) -> Path:

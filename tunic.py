@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -B
 """tunic.py — Hyperparameter tuning for image classifiers using Ray Tune + timm."""
 
 import argparse
@@ -836,7 +836,7 @@ def run_tuning(args):
         all_trials.append({
             "val_acc": r.metrics.get("val_acc") if r.metrics else None,
             "val_auroc": r.metrics.get("val_auroc") if r.metrics else None,
-            "params": {k: r.config[k] for k in hp_keys if k in r.config},
+            "params": {k: r.config[k] for k in hp_keys if k in r.config} if r.config else {},
             "state": state,
         })
 
