@@ -43,6 +43,7 @@ def parse_args():
     p.add_argument("--idle-minutes",  type=int, default=60,                           dest="idle_minutes",  help="Auto-stop cluster after N idle minutes")
     p.add_argument("--copy",          action="store_true",                            dest="copy",          help="Copy data from S3 to local disk instead of mounting (slower setup, faster training)")
     p.add_argument("--no-autostop",   action="store_true",                            dest="no_autostop",   help="Disable auto-stop; cluster stays up after job finishes")
+    p.add_argument("--tune-metric",   type=str, default="val_auroc",                  dest="tune_metric",   help="Metric used by Optuna and ASHA for trial selection (default: val_auroc)")
     return p.parse_args()
 
 
@@ -77,6 +78,7 @@ def build_yaml(args) -> dict:
         "PREFIX":             args.prefix,
         "RAY_RESULTS":        resume_s3,
         "TRAINING_FRACTION":  str(args.training_fraction),
+        "TUNE_METRIC":        args.tune_metric,
     }
 
     _setup_start = (
@@ -154,6 +156,7 @@ def build_yaml(args) -> dict:
         "    --ray-storage $RAY_RESULTS \\\n"
         "    --ray-address localhost:$RAY_PORT \\\n"
         + _training_fraction_arg +
+        "    --tune-metric $TUNE_METRIC \\\n"
         "    --device      auto\n"
         "\n"
         "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json\n"

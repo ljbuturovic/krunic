@@ -874,9 +874,9 @@ def run_tuning(args):
         resources={"GPU": 1 if use_gpu else 0, "CPU": max(1, args.workers)},
     )
 
-    search_alg = OptunaSearch(metric="val_acc", mode="max", seed=args.seed)
+    search_alg = OptunaSearch(metric=args.tune_metric, mode="max", seed=args.seed)
     scheduler = ASHAScheduler(
-        metric="val_acc",
+        metric=args.tune_metric,
         mode="max",
         max_t=args.epochs,
         grace_period=max(1, args.epochs // 5),
@@ -932,7 +932,7 @@ def run_tuning(args):
         raise
     total_time = time.time() - start_time
 
-    best = results.get_best_result(metric="val_acc", mode="max")
+    best = results.get_best_result(metric=args.tune_metric, mode="max")
     best_val_acc = best.metrics["val_acc"]
     best_val_auroc = best.metrics.get("val_auroc", float("nan"))
     best_params = {k: best.config[k] for k in hp_keys if k in best.config}
@@ -1030,6 +1030,8 @@ def parse_args():
                    help="Ray cluster address to connect to (e.g. localhost:6385); defaults to local")
     p.add_argument("--ray-storage", type=str, default=None, dest="ray_storage",
                    help="Ray Tune storage path (local dir or S3 URI, e.g. s3://bucket/ray-results)")
+    p.add_argument("--tune-metric", type=str, default="val_auroc", dest="tune_metric",
+                   help="Metric used by Optuna and ASHA for trial selection and pruning (default: val_auroc)")
     return p.parse_args()
 
 
@@ -1037,7 +1039,7 @@ def main():
     args = parse_args()
 
     if args.val_fraction is None:
-        args.val_fraction = args.training_fraction
+        args.val_fraction = 1.0
 
     if args.smoke_test:
         run_smoke_test(args)
