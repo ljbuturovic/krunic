@@ -1,4 +1,4 @@
-# tunic — Hyperparameter Tuning for Image Classifiers
+# krunic, tunic — Hyperparameter Tuning for Image Classifiers
 
 **tunic** is an automated hyperparameter search system for image classifiers, built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), and [timm](https://github.com/huggingface/pytorch-image-models). **krunic** is its companion launcher that runs tunic on multi-node GPU clusters via [SkyPilot](https://skypilot.readthedocs.io/).
 
