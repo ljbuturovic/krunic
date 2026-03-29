@@ -654,6 +654,149 @@ def _tune_trial(config: dict):
 # Final training
 # ---------------------------------------------------------------------------
 
+def _build_combined_loader(data_root, fmt, batch_size, workers, seed, train_tf, collate_fn):
+    """Build a DataLoader combining train+val splits. Exits if val is missing."""
+    if fmt == "webdataset":
+        try:
+            import webdataset as wds
+        except ImportError:
+            logger.error("webdataset not installed")
+            sys.exit(1)
+        is_s3 = data_root.startswith("s3://")
+        if is_s3:
+            import subprocess
+            info_url = data_root.rstrip("/") + "/wds/dataset_info.json"
+            r = subprocess.run(["aws", "s3", "cp", info_url, "-"],
+                               capture_output=True, text=True, check=True)
+            meta = json.loads(r.stdout)
+        else:
+            with open(Path(data_root) / "wds" / "dataset_info.json") as f:
+                meta = json.load(f)
+        if "val" not in meta.get("splits", {}):
+            logger.error("--combine specified but no val split found in dataset_info.json")
+            sys.exit(1)
+        classes = meta["classes"]
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+        num_classes = len(classes)
+
+        def shard_urls(split):
+            n = meta["splits"][split]["num_shards"]
+            if is_s3:
+                base = data_root.rstrip("/")
+                return [f"pipe:aws s3 cp {base}/wds/{split}/shard-{i:06d}.tar -" for i in range(n)]
+            d = Path(data_root) / "wds" / split
+            return [str(d / f"shard-{i:06d}.tar") for i in range(n)]
+
+        urls = shard_urls("train") + shard_urls("val")
+        n_train = meta["splits"]["train"]["num_samples"]
+        n_val = meta["splits"]["val"]["num_samples"]
+        n_total = n_train + n_val if n_train > 0 and n_val > 0 else len(urls) * 5000
+
+        _img_decoder = wds.autodecode.imagehandler("pil")
+        def _decoder(key, data):
+            if key.endswith(".cls"):
+                return data
+            return _img_decoder(key, data)
+        def decode_cls(b):
+            return class_to_idx[b.decode().strip()]
+        def apply_tf(img):
+            return train_tf(img.convert("RGB"))
+
+        effective_workers = min(workers, len(urls)) if workers > 0 else 1
+        slice_per_worker = max(batch_size, n_total // effective_workers)
+        dataset = (
+            wds.WebDataset(urls, shardshuffle=True, seed=seed,
+                           nodesplitter=wds.split_by_node, empty_check=False)
+            .shuffle(1000)
+            .decode(_decoder)
+            .to_tuple("png", "cls")
+            .map_tuple(apply_tf, decode_cls)
+            .slice(slice_per_worker)
+            .with_length(n_total)
+        )
+        return DataLoader(dataset, batch_size=batch_size, num_workers=workers,
+                          pin_memory=False, collate_fn=collate_fn), num_classes
+    else:
+        train_dir = Path(data_root) / "train"
+        val_dir = Path(data_root) / "val"
+        if not val_dir.exists():
+            logger.error("--combine specified but no val/ directory found")
+            sys.exit(1)
+        from torch.utils.data import ConcatDataset
+        train_ds = datasets.ImageFolder(str(train_dir), transform=train_tf)
+        val_ds = datasets.ImageFolder(str(val_dir), transform=train_tf)
+        num_classes = len(train_ds.classes)
+        combined = ConcatDataset([train_ds, val_ds])
+        return DataLoader(combined, batch_size=batch_size, shuffle=True,
+                          num_workers=workers, pin_memory=True, drop_last=True,
+                          collate_fn=collate_fn), num_classes
+
+
+def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
+    """Build a test DataLoader (WDS or imagefolder). Returns None if no test split exists."""
+    if fmt == "webdataset":
+        try:
+            import webdataset as wds
+        except ImportError:
+            logger.error("webdataset not installed")
+            return None
+        is_s3 = data_root.startswith("s3://")
+        if is_s3:
+            import subprocess
+            info_url = data_root.rstrip("/") + "/wds/dataset_info.json"
+            r = subprocess.run(["aws", "s3", "cp", info_url, "-"],
+                               capture_output=True, text=True, check=True)
+            meta = json.loads(r.stdout)
+        else:
+            with open(Path(data_root) / "wds" / "dataset_info.json") as f:
+                meta = json.load(f)
+        if "test" not in meta.get("splits", {}):
+            return None
+        classes = meta["classes"]
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+        n_shards = meta["splits"]["test"]["num_shards"]
+        n_samples = meta["splits"]["test"]["num_samples"]
+        if is_s3:
+            base = data_root.rstrip("/")
+            urls = [f"pipe:aws s3 cp {base}/wds/test/shard-{i:06d}.tar -" for i in range(n_shards)]
+        else:
+            d = Path(data_root) / "wds" / "test"
+            urls = [str(d / f"shard-{i:06d}.tar") for i in range(n_shards)]
+        _img_decoder = wds.autodecode.imagehandler("pil")
+        def _decoder(key, data):
+            if key.endswith(".cls"):
+                return data
+            return _img_decoder(key, data)
+        def decode_cls(b):
+            return class_to_idx[b.decode().strip()]
+        def apply_tf(img):
+            return val_tf(img.convert("RGB"))
+        effective_workers = min(workers, len(urls)) if workers > 0 else 1
+        if n_samples > 0:
+            slice_per_worker = max(batch_size, n_samples // effective_workers)
+            length = n_samples
+        else:
+            slice_per_worker = 10 ** 9  # no limit
+            length = n_shards * 5000    # rough estimate
+        dataset = (
+            wds.WebDataset(urls, shardshuffle=False, seed=seed,
+                           nodesplitter=wds.split_by_node, empty_check=False)
+            .decode(_decoder)
+            .to_tuple("png", "cls")
+            .map_tuple(apply_tf, decode_cls)
+            .slice(slice_per_worker)
+            .with_length(length)
+        )
+        return DataLoader(dataset, batch_size=batch_size, num_workers=workers, pin_memory=False)
+    else:
+        test_dir = Path(data_root) / "test"
+        if not test_dir.exists():
+            return None
+        test_dataset = datasets.ImageFolder(str(test_dir), transform=val_tf)
+        return DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+                          num_workers=workers, pin_memory=True)
+
+
 def run_final(args):
     final_json = Path(args.final)
     try:
@@ -673,7 +816,8 @@ def run_final(args):
     params = results["best_params"]
     model_name = args.model or results.get("model", "resnet50")
     num_classes = results.get("num_classes")
-    data_path = Path(args.data) if args.data else Path(results.get("dataset", "."))
+    data_root = args.data if args.data else results.get("dataset", ".")
+    data_path = Path(data_root)
     epochs = args.final_epochs or results.get("epochs", 30)
 
     validate_dataset_path(data_path)
@@ -687,10 +831,22 @@ def run_final(args):
     train_tf = build_transforms(args.img_size, params.get("randaugment_magnitude", 0),
                                 params.get("randaugment_num_ops", 2), is_train=True)
     val_tf = build_transforms(args.img_size, is_train=False)
-    train_loader, val_loader, inferred_classes = _build_loaders(data_path, args.batch_size,
-                                                                args.workers, args.seed,
-                                                                train_tf, val_tf, collate_fn,
-                                                                training_fraction=args.training_fraction, val_fraction=args.val_fraction)
+
+    fmt = _detect_format(data_root)
+    if args.combine:
+        train_loader, inferred_classes = _build_combined_loader(
+            data_root, fmt, args.batch_size, args.workers, args.seed, train_tf, collate_fn)
+        val_loader = None
+    elif fmt == "webdataset":
+        train_loader, val_loader, inferred_classes = _build_wds_loaders(
+            data_root, args.batch_size, args.workers, args.seed,
+            train_tf, val_tf, collate_fn,
+            training_fraction=args.training_fraction, val_fraction=args.val_fraction)
+    else:
+        train_loader, val_loader, inferred_classes = _build_loaders(
+            data_path, args.batch_size, args.workers, args.seed,
+            train_tf, val_tf, collate_fn,
+            training_fraction=args.training_fraction, val_fraction=args.val_fraction)
     if num_classes is None:
         num_classes = inferred_classes
 
@@ -705,6 +861,7 @@ def run_final(args):
     criterion = nn.CrossEntropyLoss(label_smoothing=params.get("label_smoothing", 0.0))
     val_criterion = nn.CrossEntropyLoss()
 
+    best_val_auroc = 0.0
     best_val_acc = 0.0
     best_epoch = 0
     best_state = None
@@ -718,12 +875,17 @@ def run_final(args):
             model, train_loader, optimizer, scheduler, criterion, device,
             use_soft_labels=use_mixup_cutmix, epoch=epoch, epochs=epochs
         )
-        _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
 
-        logger.info(f"Epoch {epoch+1}/{epochs} — train_loss={train_loss:.4f} train_acc={train_acc:.4f} val_acc={val_acc:.4f} val_auroc={val_auroc:.4f}")
-
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        if val_loader is not None:
+            _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
+            logger.info(f"Epoch {epoch+1}/{epochs} — train_loss={train_loss:.4f} train_acc={train_acc:.4f} val_acc={val_acc:.4f} val_auroc={val_auroc:.4f}")
+            if val_auroc > best_val_auroc:
+                best_val_auroc = val_auroc
+                best_val_acc = val_acc
+                best_epoch = epoch + 1
+                best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        else:
+            logger.info(f"Epoch {epoch+1}/{epochs} — train_loss={train_loss:.4f} train_acc={train_acc:.4f}")
             best_epoch = epoch + 1
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
 
@@ -731,6 +893,7 @@ def run_final(args):
     torch.save({
         "model_state_dict": best_state,
         "best_val_acc": best_val_acc,
+        "best_val_auroc": best_val_auroc,
         "epoch": best_epoch,
         "params": params,
         "model_name": model_name,
@@ -738,8 +901,20 @@ def run_final(args):
     }, checkpoint_path)
 
     print(f"\nFinal training complete.")
-    print(f"  Best val accuracy: {best_val_acc:.4f} (epoch {best_epoch})")
+    if val_loader is not None:
+        print(f"  Best val accuracy: {best_val_acc:.4f}  val AUROC: {best_val_auroc:.4f} (epoch {best_epoch})")
+    else:
+        print(f"  Trained on train+val combined for {best_epoch} epochs (no val tracking)")
     print(f"  Checkpoint saved to: {checkpoint_path}")
+
+    test_loader = _build_test_loader(data_root, fmt, args.batch_size, args.workers, args.seed, val_tf)
+    if test_loader is not None:
+        model.load_state_dict(best_state)
+        model.to(device)
+        _, test_acc, test_auroc = evaluate(model, test_loader, val_criterion, device)
+        print(f"  Test accuracy:      {test_acc:.4f}  test AUROC: {test_auroc:.4f}")
+    else:
+        print(f"  No test split found — skipping test evaluation.")
 
 
 # ---------------------------------------------------------------------------
@@ -1018,6 +1193,8 @@ def parse_args():
                    help="Path to tunic_results.json — skip tuning, train final model")
     p.add_argument("--final-epochs", type=int, default=None, dest="final_epochs",
                    help="Override epoch count for final training run (defaults to tuning epochs)")
+    p.add_argument("--combine", action="store_true", default=False,
+                   help="Train final model on train+val combined (requires --final; exits if no val split)")
     p.add_argument("--resume", type=str, default=None,
                    help="Path to a previous Ray Tune experiment directory; warm-starts Optuna search from those results and runs --n_trials new trials")
     p.add_argument("--search-space", type=str, default=None, dest="search_space",
