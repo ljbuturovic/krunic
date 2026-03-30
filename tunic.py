@@ -362,36 +362,41 @@ def build_scheduler(optimizer, epochs: int, steps_per_epoch: int, warmup_epochs:
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
-def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels, trial_id="", epoch=0, epochs=0):
+def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_soft_labels, trial_id="", epoch=0, epochs=0, use_amp=False, show_progress=True):
     model.train()
     total_loss = 0.0
     correct = 0
     total = 0
+    use_amp = use_amp and device.type == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     epoch_str = f" epoch {epoch+1}/{epochs}" if epochs else ""
     desc = f"trial {trial_id}{epoch_str}" if trial_id else f"train{epoch_str}"
-    bar = tqdm(loader, leave=False, desc=desc,
+    bar = tqdm(loader, leave=False, desc=desc, disable=not show_progress,
                bar_format="{l_bar}{bar}| batch {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]")
     for images, labels in bar:
         images = images.to(device)
-
         optimizer.zero_grad()
-        outputs = model(images)
+        with torch.autocast(device_type=device.type, enabled=use_amp):
+            outputs = model(images)
+            if use_soft_labels and labels.dim() == 2:
+                labels = labels.to(device)
+                loss = -(labels * nn.functional.log_softmax(outputs, dim=-1)).sum(dim=-1).mean()
+            else:
+                labels = labels.to(device)
+                loss = criterion(outputs, labels)
 
+        preds = outputs.argmax(dim=1)
         if use_soft_labels and labels.dim() == 2:
-            labels = labels.to(device)
-            loss = -(labels * nn.functional.log_softmax(outputs, dim=-1)).sum(dim=-1).mean()
-            preds = outputs.argmax(dim=1)
             correct += (preds == labels.argmax(dim=1)).sum().item()
         else:
-            labels = labels.to(device)
-            loss = criterion(outputs, labels)
-            preds = outputs.argmax(dim=1)
             correct += (preds == labels).sum().item()
 
-        loss.backward()
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
         scheduler.step()
 
         total_loss += loss.item() * images.size(0)
@@ -416,7 +421,7 @@ def _compute_auroc(probs: np.ndarray, labels: np.ndarray) -> float:
         return float("nan")
 
 
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, criterion, device, use_amp=False):
     model.eval()
     total_loss = 0.0
     correct = 0
@@ -427,11 +432,13 @@ def evaluate(model, loader, criterion, device):
     with torch.no_grad():
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
-            total_loss += criterion(outputs, labels).item() * images.size(0)
+            with torch.autocast(device_type=device.type, enabled=use_amp):
+                outputs = model(images)
+                loss_val = criterion(outputs, labels)
+            total_loss += loss_val.item() * images.size(0)
             correct += (outputs.argmax(dim=1) == labels).sum().item()
             total += images.size(0)
-            all_probs.append(torch.softmax(outputs, dim=1).cpu())
+            all_probs.append(torch.softmax(outputs.float(), dim=1).cpu())
             all_labels.append(labels.cpu())
 
     probs = torch.cat(all_probs).numpy()
@@ -798,6 +805,7 @@ def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
 
 
 def run_final(args):
+    t0 = time.time()
     final_json = Path(args.final)
     try:
         with open(final_json) as f:
@@ -823,6 +831,8 @@ def run_final(args):
     validate_dataset_path(data_path)
 
     device = get_device(args.device)
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     set_seed(args.seed)
 
     use_mixup_cutmix = params.get("mixup_alpha", 0) > 0 or params.get("cutmix_alpha", 0) > 0
@@ -865,6 +875,7 @@ def run_final(args):
     best_val_acc = 0.0
     best_epoch = 0
     best_state = None
+    stats_lines = []
 
     for epoch in range(epochs):
         if args.freeze_backbone > 0 and epoch == args.freeze_backbone:
@@ -873,23 +884,27 @@ def run_final(args):
 
         train_loss, train_acc = train_one_epoch(
             model, train_loader, optimizer, scheduler, criterion, device,
-            use_soft_labels=use_mixup_cutmix, epoch=epoch, epochs=epochs
+            use_soft_labels=use_mixup_cutmix, epoch=epoch, epochs=epochs,
+            use_amp=args.amp, show_progress=True
         )
 
         if val_loader is not None:
-            _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
-            logger.info(f"Epoch {epoch+1}/{epochs} — train_loss={train_loss:.4f} train_acc={train_acc:.4f} val_acc={val_acc:.4f} val_auroc={val_auroc:.4f}")
+            _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device, use_amp=args.amp)
+            line = f"INFO: Epoch {epoch+1}/{epochs}  train_loss={train_loss:.4f}  train_acc={train_acc:.4f}  val_acc={val_acc:.4f}  val_auroc={val_auroc:.4f}"
             if val_auroc > best_val_auroc:
                 best_val_auroc = val_auroc
                 best_val_acc = val_acc
                 best_epoch = epoch + 1
                 best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         else:
-            logger.info(f"Epoch {epoch+1}/{epochs} — train_loss={train_loss:.4f} train_acc={train_acc:.4f}")
+            line = f"INFO: Epoch {epoch+1}/{epochs}  train_loss={train_loss:.4f}  train_acc={train_acc:.4f}"
             best_epoch = epoch + 1
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
 
-    checkpoint_path = "tunic_final.pt"
+        tqdm.write(line)
+        stats_lines.append(line)
+
+    checkpoint_path = args.final_model
     torch.save({
         "model_state_dict": best_state,
         "best_val_acc": best_val_acc,
@@ -900,21 +915,30 @@ def run_final(args):
         "num_classes": num_classes,
     }, checkpoint_path)
 
-    print(f"\nFinal training complete.")
+    summary_lines = ["", "Final training complete."]
     if val_loader is not None:
-        print(f"  Best val accuracy: {best_val_acc:.4f}  val AUROC: {best_val_auroc:.4f} (epoch {best_epoch})")
+        summary_lines.append(f"  Best val accuracy: {best_val_acc:.4f}  val AUROC: {best_val_auroc:.4f} (epoch {best_epoch})")
     else:
-        print(f"  Trained on train+val combined for {best_epoch} epochs (no val tracking)")
-    print(f"  Checkpoint saved to: {checkpoint_path}")
+        summary_lines.append(f"  Trained on train+val combined for {best_epoch} epochs (no val tracking)")
+    summary_lines.append(f"  Checkpoint saved to: {checkpoint_path}")
 
     test_loader = _build_test_loader(data_root, fmt, args.batch_size, args.workers, args.seed, val_tf)
     if test_loader is not None:
         model.load_state_dict(best_state)
         model.to(device)
-        _, test_acc, test_auroc = evaluate(model, test_loader, val_criterion, device)
-        print(f"  Test accuracy:      {test_acc:.4f}  test AUROC: {test_auroc:.4f}")
+        _, test_acc, test_auroc = evaluate(model, test_loader, val_criterion, device, use_amp=args.amp)
+        summary_lines.append(f"  Test accuracy:      {test_acc:.4f}  test AUROC: {test_auroc:.4f}")
     else:
-        print(f"  No test split found — skipping test evaluation.")
+        summary_lines.append("  No test split found — skipping test evaluation.")
+    summary_lines.append(f"  Elapsed: {(time.time() - t0) / 60:.1f}m")
+
+    for line in summary_lines:
+        tqdm.write(line)
+
+    if args.final_stats:
+        with open(args.final_stats, "w") as f:
+            f.write("\n".join(stats_lines + summary_lines) + "\n")
+        tqdm.write(f"  Stats written to: {args.final_stats}")
 
 
 # ---------------------------------------------------------------------------
@@ -1195,6 +1219,12 @@ def parse_args():
                    help="Override epoch count for final training run (defaults to tuning epochs)")
     p.add_argument("--combine", action="store_true", default=False,
                    help="Train final model on train+val combined (requires --final; exits if no val split)")
+    p.add_argument("--amp", action="store_true", default=False,
+                   help="Enable automatic mixed precision (AMP) for faster training on CUDA (requires --final)")
+    p.add_argument("--final-model", type=str, default="tunic_final.pt", dest="final_model",
+                   help="Output filename for the final model checkpoint (default: tunic_final.pt)")
+    p.add_argument("--final-stats", type=str, default=None, dest="final_stats",
+                   help="Output filename for final training stats text file (optional)")
     p.add_argument("--resume", type=str, default=None,
                    help="Path to a previous Ray Tune experiment directory; warm-starts Optuna search from those results and runs --n_trials new trials")
     p.add_argument("--search-space", type=str, default=None, dest="search_space",
