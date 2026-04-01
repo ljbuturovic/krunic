@@ -1108,6 +1108,8 @@ def run_tuning(args):
                 "best_val_auroc":   best.get("val_auroc"),
                 "best_params":      best.get("params", {}),
                 "completed_trials": len(self.completed),
+                "model":            args.model,
+                "epochs":           args.epochs,
                 "all_trials":       self.completed,
                 "status":           "in_progress",
             }

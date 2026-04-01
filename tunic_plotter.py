@@ -48,9 +48,11 @@ def plot_metric(data, trials, metric, results_file, trial_sort):
     ax.axhline(best_val, color="crimson", linewidth=0.8, linestyle="--", alpha=0.5)
 
     if "auroc" in metric:
-        ax.set_ylim(0.5, 1.0)
+        ax.set_ylim(0.5, 1.05)
+        ax.set_yticks(np.arange(0.5, 1.06, 0.1))
     elif "acc" in metric:
-        ax.set_ylim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.05)
+        ax.set_yticks(np.arange(0.0, 1.06, 0.1))
 
     ax.set_xlabel("Trial rank" if not trial_sort else "Trial")
     ax.set_ylabel(metric)
