@@ -1086,9 +1086,38 @@ def run_tuning(args):
     else:
         storage_path = str(Path(args.output).parent.resolve() / "ray_results")
 
+    class _IntermediateResultsCallback(tune.Callback):
+        def __init__(self):
+            self.completed = []
+
+        def on_trial_complete(self, iteration, trials, trial, **kwargs):
+            if not trial.last_result:
+                return
+            self.completed.append({
+                "val_acc":   trial.last_result.get("val_acc"),
+                "val_auroc": trial.last_result.get("val_auroc"),
+                "params":    {k: trial.config[k] for k in hp_keys if k in trial.config},
+                "status":    trial.status,
+            })
+            valid = [t for t in self.completed if t.get(args.tune_metric) is not None]
+            if not valid:
+                return
+            best = max(valid, key=lambda t: t.get(args.tune_metric, float("-inf")))
+            snapshot = {
+                "best_val_acc":     best.get("val_acc"),
+                "best_val_auroc":   best.get("val_auroc"),
+                "best_params":      best.get("params", {}),
+                "completed_trials": len(self.completed),
+                "all_trials":       self.completed,
+                "status":           "in_progress",
+            }
+            with open(args.output, "w") as f:
+                json.dump(snapshot, f, indent=2)
+
     run_config = RunConfig(
         storage_path=storage_path,
         name="tunic_study",
+        callbacks=[_IntermediateResultsCallback()],
     )
 
     if args.resume:

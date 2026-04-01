@@ -33,7 +33,8 @@ def parse_args():
     p.add_argument("--disk-size",     type=int, default=200,                          dest="disk_size",     help="Disk size in GB per node")
     p.add_argument("--spot",          action="store_true",                            dest="spot",          help="Use spot instances")
     p.add_argument("--bucket",        type=str, default="image.data",                 dest="bucket",        help="S3 bucket name")
-    p.add_argument("--requirements",  type=str, default="~/github/tunic/requirements.txt", dest="requirements", help="Local requirements.txt path")
+    p.add_argument("--requirements",  type=str, default=None,                               dest="requirements", help="Local requirements.txt path (default: <workdir>/requirements.txt)")
+    p.add_argument("--workdir",       type=str, required=True,                              dest="workdir",       help="Local directory to sync to the cluster")
     p.add_argument("--model",         type=str, default="resnet50",                   dest="model",         help="timm model name")
     p.add_argument("--n-trials",      type=int, default=30,                           dest="n_trials",      help="Number of Optuna trials")
     p.add_argument("--n-epochs",      type=int, default=30,                           dest="n_epochs",      help="Training epochs per trial")
@@ -49,8 +50,8 @@ def parse_args():
 
 
 def build_yaml(args) -> dict:
-    requirements_path = Path(args.requirements).expanduser()
-    workdir = str(requirements_path.parent)
+    workdir = str(Path(args.workdir).expanduser())
+    requirements_path = Path(args.requirements).expanduser() if args.requirements else Path(workdir) / "requirements.txt"
 
     resources = {
         "cloud": args.cloud,

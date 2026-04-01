@@ -18,27 +18,18 @@ def parse_args():
     return p.parse_args()
 
 
-def main():
-    args = parse_args()
-
-    with open(args.results_file) as f:
-        data = json.load(f)
-
-    trials = data["all_trials"]
-    metric = args.metric
-
+def plot_metric(data, trials, metric, results_file, trial_sort):
     values = []
     for t in trials:
         if metric not in t:
-            print(f"Error: metric '{metric}' not found in trial data.", file=sys.stderr)
-            print(f"Available metrics: {[k for k in trials[0] if k not in ('params', 'state')]}", file=sys.stderr)
-            sys.exit(1)
+            print(f"Warning: metric '{metric}' not found in trial data, skipping.", file=sys.stderr)
+            return
         values.append(t[metric] if t[metric] is not None else float("nan"))
 
     values = np.array(values)
     best_val = float(np.nanmax(values))
 
-    if not args.trial_sort:
+    if not trial_sort:
         order = np.argsort(values)
         values = values[order]
         best_idx = len(values) - 1 - int(np.sum(np.isnan(values)))
@@ -49,25 +40,19 @@ def main():
 
     fig, ax = plt.subplots(figsize=(10, 5))
 
-    ax.scatter(
-        range(len(values)), values,
-        color="steelblue", s=40, zorder=3, label="Trial"
-    )
-    ax.scatter(
-        [best_idx], [best_val],
-        color="crimson", s=80, zorder=4, label=f"Best ({best_val:.4f})"
-    )
-    if args.trial_sort:
-        ax.step(
-            range(len(running_best)), running_best,
-            color="orange", linewidth=1.5, where="post", label="Running best"
-        )
+    ax.scatter(range(len(values)), values, color="steelblue", s=40, zorder=3, label="Trial")
+    ax.scatter([best_idx], [best_val], color="crimson", s=80, zorder=4, label=f"Best ({best_val:.4f})")
+    if trial_sort:
+        ax.step(range(len(running_best)), running_best,
+                color="orange", linewidth=1.5, where="post", label="Running best")
     ax.axhline(best_val, color="crimson", linewidth=0.8, linestyle="--", alpha=0.5)
 
     if "auroc" in metric:
         ax.set_ylim(0.5, 1.0)
+    elif "acc" in metric:
+        ax.set_ylim(0.0, 1.0)
 
-    ax.set_xlabel("Trial rank" if not args.trial_sort else "Trial")
+    ax.set_xlabel("Trial rank" if not trial_sort else "Trial")
     ax.set_ylabel(metric)
     ax.set_title(
         f"{data.get('model', '')}  |  {metric}  |  "
@@ -79,10 +64,26 @@ def main():
 
     plt.tight_layout()
 
-    out_path = args.results_file.with_suffix("").with_name(args.results_file.stem + f"_{metric}.png")
+    out_path = results_file.with_suffix("").with_name(results_file.stem + f"_{metric}.png")
     plt.savefig(out_path, dpi=150)
     print(f"Saved: {out_path}")
-    plt.show()
+    plt.close()
+
+
+def main():
+    args = parse_args()
+
+    with open(args.results_file) as f:
+        data = json.load(f)
+
+    trials = data["all_trials"]
+
+    if args.metric == "val_auroc":
+        # default: plot both
+        plot_metric(data, trials, "val_auroc", args.results_file, args.trial_sort)
+        plot_metric(data, trials, "val_acc",   args.results_file, args.trial_sort)
+    else:
+        plot_metric(data, trials, args.metric, args.results_file, args.trial_sort)
 
 
 if __name__ == "__main__":
