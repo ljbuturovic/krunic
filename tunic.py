@@ -829,7 +829,7 @@ def run_final(args):
     num_classes = results.get("num_classes")
     data_root = args.data if args.data else results.get("dataset", ".")
     data_path = Path(data_root)
-    epochs = args.final_epochs or args.epochs or results.get("epochs", 30)
+    epochs = args.epochs or results.get("epochs", 30)
 
     validate_dataset_path(data_path)
 
@@ -983,7 +983,6 @@ def run_smoke_test(args):
             resume=None,
             search_space=None,
             final=None,
-            final_epochs=None,
             smoke_test=False,
             num_train_workers=1,
         )
@@ -993,7 +992,7 @@ def run_smoke_test(args):
         # Final mode
         smoke_final_args = argparse.Namespace(**vars(smoke_args))
         smoke_final_args.final = smoke_args.output
-        smoke_final_args.final_epochs = 2
+        smoke_final_args.epochs = 2
         run_final(smoke_final_args)
 
     logger.info("Smoke test passed.")
@@ -1253,8 +1252,6 @@ def parse_args():
                    help="Epochs to freeze backbone; 0 = no freeze")
     p.add_argument("--final", type=str, default=None,
                    help="Path to tunic_results.json — skip tuning, train final model")
-    p.add_argument("--final-epochs", type=int, default=None, dest="final_epochs",
-                   help="Override epoch count for final training run (defaults to tuning epochs)")
     p.add_argument("--combine", action="store_true", default=False,
                    help="Train final model on train+val combined (requires --final; exits if no val split)")
     p.add_argument("--amp", action="store_true", default=False,
