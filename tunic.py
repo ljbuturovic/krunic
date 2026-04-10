@@ -822,11 +822,14 @@ def run_final(args):
         sys.exit(1)
 
     params = results["best_params"]
-    model_name = args.model or results.get("model", "resnet50")
+    model_name = args.model or results.get("model")
+    if not model_name:
+        logger.error("Model not found in results JSON and --model not specified. Pass --model explicitly.")
+        sys.exit(1)
     num_classes = results.get("num_classes")
     data_root = args.data if args.data else results.get("dataset", ".")
     data_path = Path(data_root)
-    epochs = args.final_epochs or results.get("epochs", 30)
+    epochs = args.final_epochs or args.epochs or results.get("epochs", 30)
 
     validate_dataset_path(data_path)
 
@@ -1002,6 +1005,10 @@ def run_smoke_test(args):
 # ---------------------------------------------------------------------------
 
 def run_tuning(args):
+    if not args.model:
+        logger.error("--model is required for tuning. E.g. --model resnet50")
+        sys.exit(1)
+
     if not RAY_AVAILABLE:
         logger.error("Ray is not installed. Install with: pip install 'ray[tune,train]' optuna")
         sys.exit(1)
@@ -1218,7 +1225,7 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--data", type=str, help="Path to dataset root (ImageFolder layout)")
-    p.add_argument("--model", type=str, default="resnet50",
+    p.add_argument("--model", type=str, default=None,
                    help="Any timm model name (e.g. resnet50, efficientnet_b0, convnext_tiny)")
     p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
                    help="Use timm pretrained weights")
