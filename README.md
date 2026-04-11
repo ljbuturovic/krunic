@@ -64,7 +64,7 @@ $ tunic --final kaws_results.json --data /path/to/dataset --epochs 50 --amp
 
 ## Results on common benchmarks
 
-| Dataset | Model | Metric | Val AUROC | Test AUROC | SOTA |
+| Dataset | Model | Metric | Validation | Test | SOTA |
 |---|---|---|---|---|---|
 | PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.96 | 0.96 |
 | TinyImageNet | ViT-Small | Accuracy | 0.87  | | 0.91 |
