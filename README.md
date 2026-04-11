@@ -39,6 +39,11 @@ $ krunic \
   --prefix kaws
 ```
 
+@SkyPilot creates the cluster, @Ray distributes the load across the GPUs:
+
+![Description](pcam14_GPU_load.png)
+
+
 Upon completion, get the best model hyperparameters:
 
 ```bash
