@@ -48,6 +48,7 @@ $ aws s3 cp s3://image.data/ray-results/tin6/kaws_results.json .
 ```bash
 $ tunic-plotter kaws_results.json
 ```
+![Description](images/tin5_results_val_acc.png)
 
 Remember to take down the cluster after downloading the results. 
 
@@ -66,7 +67,7 @@ $ tunic --final kaws_results.json --data /path/to/dataset --epochs 50 --amp
 
 | Dataset | Model | Metric | Validation | Test | SOTA |
 |---|---|---|---|---|---|
-| PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.96 | 0.96 |
+| PCam | ResNet18 | AUROC | 0.96 | 0.96 | 0.96 |
 | TinyImageNet | ViT-Small | Accuracy | 0.87  | | 0.91 |
 | ChestMNIST | ResNet18 | AUROC | 0.75 | 0.75 | 0.77 |
 | TissueMNIST | ResNet18 | AUROC | 0.92 | 0.94 | 0.93 |
