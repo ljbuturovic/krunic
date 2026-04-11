@@ -48,7 +48,7 @@ $ tunic-plotter results.json
 | Dataset | Model | Metric | Val AUROC | Test AUROC | SOTA |
 |---|---|---|---|---|---|
 | PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.97 | 0.96 |
-| TinyImageNet | ViT-Small | Acc | 0.87  | | 0.90 |
+| TinyImageNet | ViT-Small | Accuracy | 0.87  | | 0.91 |
 | ChestMNIST | ResNet18 | AUROC | 0.75 | 0.75 | 0.77 |
 | TissueMNIST | ResNet18 | AUROC | 0.92 | 0.94 | 0.93 |
 
