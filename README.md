@@ -16,12 +16,12 @@ This installs three commands: `tunic` (local training), `krunic` (cloud launcher
 
 **Local:**
 ```bash
-tunic --data /path/to/dataset --model resnet50 --n_trials 30 --epochs 30 --output results.json
+$ tunic --data /path/to/dataset --model resnet50 --n_trials 30 --epochs 30 --output results.json
 ```
 
 **Cloud (AWS):**
 ```bash
-krunic \
+$ krunic \
   --cluster my-cluster \
   --workdir ~/github/krunic \
   --s3-path my-dataset \
@@ -35,12 +35,12 @@ krunic \
 
 **Train final model from tuning results:**
 ```bash
-tunic --final results.json --data /path/to/dataset --epochs 50 --amp
+$ tunic --final results.json --data /path/to/dataset --epochs 50 --amp
 ```
 
 **Plot results:**
 ```bash
-tunic-plotter results.json
+$ tunic-plotter results.json
 ```
 
 ## Results on standard benchmarks
