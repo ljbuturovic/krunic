@@ -45,12 +45,12 @@ $ tunic-plotter results.json
 
 ## Results on standard benchmarks
 
-| Dataset | Model | Val AUROC | Test AUROC | Notes |
-|---|---|---|---|---|
-| PCam (patch camelyon) | ResNet18 | 0.96 | 0.97 | SOTA is 0.96 |
-| TinyImageNet | ViT-Small | 0.87 (acc) | — | SOTA ~0.90 |
-| ChestMNIST | ResNet18 | 0.76 | 0.75 | 14-class multi-label |
-| TissueMNIST | ResNet18 | — | 0.94 | |
+| Dataset | Model | Metric | Val AUROC | Test AUROC | SOTA |
+|---|---|---|---|---|---|
+| PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.97 | 0.96 |
+| TinyImageNet | ViT-Small | Acc | 0.87  | | 0.90 |
+| ChestMNIST | ResNet18 | AUROC | 0.76 | 0.75 |  |
+| TissueMNIST | ResNet18 | AUROC |  | 0.94 | |
 
 All runs use generic off-the-shelf models with no domain-specific modifications.
 
