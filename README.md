@@ -48,7 +48,7 @@ $ aws s3 cp s3://image.data/ray-results/tin6/kaws_results.json .
 ```bash
 $ tunic-plotter kaws_results.json
 ```
-![Description](images/tin5_results_val_acc.png)
+![Description](tin5_results_val_acc.png)
 
 Remember to take down the cluster after downloading the results. 
 
