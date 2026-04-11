@@ -49,8 +49,8 @@ $ tunic-plotter results.json
 |---|---|---|---|---|---|
 | PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.97 | 0.96 |
 | TinyImageNet | ViT-Small | Acc | 0.87  | | 0.90 |
-| ChestMNIST | ResNet18 | AUROC | 0.76 | 0.75 |  |
-| TissueMNIST | ResNet18 | AUROC |  | 0.94 | |
+| ChestMNIST | ResNet18 | AUROC | 0.75 | 0.75 | 0.77 |
+| TissueMNIST | ResNet18 | AUROC | 0.92 | 0.94 | 0.93 |
 
 All runs use generic off-the-shelf models with no domain-specific modifications.
 
