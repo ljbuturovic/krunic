@@ -134,7 +134,7 @@ krunic --cluster NAME --workdir DIR --s3-path PATH --model MODEL [options]
 | Flag | Default | Description |
 |---|---|---|
 | `--cluster` | required | SkyPilot cluster name |
-| `--workdir` | package dir | Local directory synced to the cluster |
+| `--workdir` | package dir | Local directory synced to the cluster. Used for development |
 | `--s3-path` | required | Dataset path within the S3 bucket |
 | `--model` | required | Any timm model name |
 | `--accelerator` | `T4:4` | GPU spec (e.g. `T4:4`, `A10G:1`, `A100:8`) |
