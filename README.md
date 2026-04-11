@@ -1,13 +1,13 @@
 # krunic
 
-Automated hyperparameter search for image classifiers — from dataset to tuned model with one command.
+Automated hyperparameter search for image classifiers — from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
 Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), [timm](https://github.com/huggingface/pytorch-image-models), and [SkyPilot](https://skypilot.readthedocs.io/).
 
-## Install
+## Install (Mac and Linux)
 
 ```bash
-pipx install krunic
+$ pipx install krunic
 ```
 
 This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer).
@@ -16,41 +16,60 @@ This installs three commands: `tunic` (local training), `krunic` (cloud launcher
 
 **Local:**
 ```bash
-tunic --data /path/to/dataset --model resnet50 --n_trials 30 --epochs 30 --output results.json
+$ tunic --data /path/to/dataset --model resnet50 --n_trials 30 --epochs 30 --output results.json
 ```
 
 **Cloud (AWS):**
+
+This requires, obviously, an AWS account. The image data must be copied to S3 prior to the run, for example like this:
+
 ```bash
-krunic \
-  --cluster my-cluster \
-  --workdir ~/github/krunic \
+$ aws s3 sync ~/image_data/tin s3://image.data/tin
+```
+
+```bash
+$ krunic \
+  --cluster skya \
   --s3-path my-dataset \
   --model resnet50 \
   --accelerator T4:4 \
   --num-nodes 4 \
   --n-trials 48 \
   --n-epochs 50 \
-  --prefix run1
+  --prefix kaws
 ```
+
+Upon completion, get the best model hyperparameters:
+
+```bash
+$ aws s3 cp s3://image.data/ray-results/tin6/kaws_results.json .
+```
+**Plot metric per trial:**
+```bash
+$ tunic-plotter kaws_results.json
+```
+
+Remember to take down the cluster after downloading the results. 
+
+```bash
+$ yes | sky down skya
+```
+
 
 **Train final model from tuning results:**
 ```bash
-tunic --final results.json --data /path/to/dataset --epochs 50 --amp
+$ tunic --final kaws_results.json --data /path/to/dataset --epochs 50 --amp
 ```
 
-**Plot results:**
-```bash
-tunic-plotter results.json
-```
 
-## Results on standard benchmarks
+## Results on common benchmarks
 
-| Dataset | Model | Val AUROC | Test AUROC | Notes |
-|---|---|---|---|---|
-| PCam (patch camelyon) | ResNet18 | 0.96 | 0.97 | SOTA is 0.96 |
-| TinyImageNet | ViT-Small | 0.87 (acc) | — | SOTA ~0.90 |
-| ChestMNIST | ResNet18 | 0.76 | 0.75 | 14-class multi-label |
-| TissueMNIST | ResNet18 | — | 0.94 | |
+| Dataset | Model | Metric | Validation | Test | SOTA |
+|---|---|---|---|---|---|
+| PCam (patch camelyon) | ResNet18 | AUROC | 0.96 | 0.96 | 0.96 |
+| TinyImageNet | ViT-Small | Accuracy | 0.87  | | 0.91 |
+| ChestMNIST | ResNet18 | AUROC | 0.75 | 0.75 | 0.77 |
+| TissueMNIST | ResNet18 | AUROC | 0.92 | 0.94 | 0.93 |
 
 All runs use generic off-the-shelf models with no domain-specific modifications.
 
