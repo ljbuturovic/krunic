@@ -110,16 +110,14 @@ tunic --data PATH --model MODEL [options]
 | `--tune-metric` | `val_auroc` | Metric for trial selection and pruning |
 | `--training_fraction` | 1.0 | Fraction of training data (val always uses 1.0) |
 | `--batch-size` | 32 | Batch size per trial |
-| `--amp` | — | Enable automatic mixed precision |
-| `--ray-address` | local | Ray cluster address |
-| `--ray-storage` | local | Ray Tune storage path (local or S3 URI) |
-| `--resume` | — | Warm-start from a previous experiment directory |
-| `--final` | — | Skip tuning; train final model from results JSON |
-| `--combine` | — | Train final model on train+val combined |
+| `--amp` |  Enable automatic mixed precision |
+| `--resume` | | Warm-start from a previous experiment directory |
+| `--final` | | Skip tuning; train final model from results JSON |
+| `--combine` | | Train final model on train+val combined |
 | `--final-model` | `tunic_final.pt` | Output path for final model weights |
-| `--final-stats` | — | Output path for final model stats (JSON) |
+| `--final-stats` | | Output path for final model stats (JSON) |
 | `--device` | `auto` | `auto`, `cuda`, `mps`, or `cpu` |
-| `--smoke-test` | — | Quick end-to-end test with synthetic data |
+| `--smoke-test` | | Quick end-to-end test with synthetic data |
 
 ## krunic — cloud launcher
 
