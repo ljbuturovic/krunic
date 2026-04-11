@@ -4,10 +4,10 @@ Automated hyperparameter search for image classifiers — from dataset to tuned 
 
 Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), [timm](https://github.com/huggingface/pytorch-image-models), and [SkyPilot](https://skypilot.readthedocs.io/).
 
-## Install
+## Install (Mac and Linux)
 
 ```bash
-pipx install krunic
+$ pipx install krunic
 ```
 
 This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer).
