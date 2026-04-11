@@ -34,7 +34,7 @@ def parse_args():
     p.add_argument("--spot",          action="store_true",                            dest="spot",          help="Use spot instances")
     p.add_argument("--bucket",        type=str, default="image.data",                 dest="bucket",        help="S3 bucket name")
     p.add_argument("--requirements",  type=str, default=None,                               dest="requirements", help="Local requirements.txt path (default: <workdir>/requirements.txt)")
-    p.add_argument("--workdir",       type=str, required=True,                              dest="workdir",       help="Local directory to sync to the cluster")
+    p.add_argument("--workdir",       type=str, default=str(Path(__file__).parent),         dest="workdir",       help="Local directory to sync to the cluster (default: installed package dir)")
     p.add_argument("--model",         type=str, default="resnet50",                   dest="model",         help="timm model name")
     p.add_argument("--n-trials",      type=int, default=30,                           dest="n_trials",      help="Number of Optuna trials")
     p.add_argument("--n-epochs",      type=int, default=30,                           dest="n_epochs",      help="Training epochs per trial")
@@ -87,7 +87,7 @@ def build_yaml(args) -> dict:
     _setup_start = (
         "curl -LsSf https://astral.sh/uv/install.sh | sh\n"
         "source $HOME/.local/bin/env\n"
-        "uv venv --clear ~/venv\n"
+        "uv venv --python 3.12 --clear ~/venv\n"
         "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli\n"
     )
     _setup_s3_copy = (

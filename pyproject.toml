@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "tunic"
-version = "0.1.0"
-description = "Add your description here"
+name = "krunic"
+version = "0.1.1"
+description = "Hyperparameter search for image classifiers using Ray Tune + SkyPilot"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -20,3 +24,11 @@ dependencies = [
     "torch==2.8.0",
     "webdataset>=1.0.2",
 ]
+
+[tool.hatch.build.targets.wheel]
+include = ["krunic/*.py", "krunic/requirements.txt"]
+
+[project.scripts]
+tunic = "krunic.tunic:main"
+krunic = "krunic.krunic:main"
+tunic-plotter = "krunic.tunic_plotter:main"
