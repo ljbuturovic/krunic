@@ -43,7 +43,7 @@ $ tunic --final results.json --data /path/to/dataset --epochs 50 --amp
 $ tunic-plotter results.json
 ```
 
-## Results on standard benchmarks
+## Results on common benchmarks
 
 | Dataset | Model | Metric | Val AUROC | Test AUROC | SOTA |
 |---|---|---|---|---|---|
