@@ -110,7 +110,7 @@ tunic --data PATH --model MODEL [options]
 | `--tune-metric` | `val_auroc` | Metric for trial selection and pruning |
 | `--training_fraction` | 1.0 | Fraction of training data (val always uses 1.0) |
 | `--batch-size` | 32 | Batch size per trial |
-| `--amp` |  Enable automatic mixed precision |
+| `--amp` | | Enable automatic mixed precision |
 | `--resume` | | Warm-start from a previous experiment directory |
 | `--final` | | Skip tuning; train final model from results JSON |
 | `--combine` | | Train final model on train+val combined |
