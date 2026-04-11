@@ -39,7 +39,7 @@ $ krunic \
   --prefix kaws
 ```
 
-@SkyPilot creates the cluster, @Ray distributes the load across the GPUs:
+@skypilot-org creates the cluster, @Ray distributes the load across the GPUs:
 
 ![Description](pcam14_GPU_load.png)
 
