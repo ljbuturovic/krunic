@@ -1,6 +1,6 @@
 # krunic
 
-Automated hyperparameter search for image classifiers — from dataset to tuned model with one command.
+Automated hyperparameter search for image classifiers — from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
 Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), [timm](https://github.com/huggingface/pytorch-image-models), and [SkyPilot](https://skypilot.readthedocs.io/).
 
@@ -20,28 +20,47 @@ $ tunic --data /path/to/dataset --model resnet50 --n_trials 30 --epochs 30 --out
 ```
 
 **Cloud (AWS):**
+
+This requires, obviously, an AWS account. The image data must be copied to S3 prior to the run, for example like this:
+
+```bash
+$ aws s3 sync ~/image_data/tin s3://image.data/tin
+```
+
 ```bash
 $ krunic \
-  --cluster my-cluster \
-  --workdir ~/github/krunic \
+  --cluster skya \
   --s3-path my-dataset \
   --model resnet50 \
   --accelerator T4:4 \
   --num-nodes 4 \
   --n-trials 48 \
   --n-epochs 50 \
-  --prefix run1
+  --prefix kaws
 ```
+
+Upon completion, get the best model hyperparameters:
+
+```bash
+$ aws s3 cp s3://image.data/ray-results/tin6/kaws_results.json .
+```
+**Plot metric per trial:**
+```bash
+$ tunic-plotter kaws_results.json
+```
+
+Remember to take down the cluster after downloading the results. 
+
+```bash
+$ yes | sky down skya
+```
+
 
 **Train final model from tuning results:**
 ```bash
-$ tunic --final results.json --data /path/to/dataset --epochs 50 --amp
+$ tunic --final kaws_results.json --data /path/to/dataset --epochs 50 --amp
 ```
 
-**Plot results:**
-```bash
-$ tunic-plotter results.json
-```
 
 ## Results on common benchmarks
 
