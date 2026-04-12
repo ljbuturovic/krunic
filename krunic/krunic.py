@@ -137,7 +137,7 @@ def build_yaml(args) -> dict:
         setup = _LiteralStr(_setup_start + _setup_s3_copy + _setup_end)
 
     _training_fraction_arg = (
-        "            --training_fraction $TRAINING_FRACTION \\\n"
+        "            --training-fraction $TRAINING_FRACTION \\\n"
         if not args.copy else ""
     )
     run = _LiteralStr(
@@ -153,7 +153,7 @@ def build_yaml(args) -> dict:
         "  ~/venv/bin/python ~/sky_workdir/tunic.py \\\n"
         "    --data        $DATA_DIR \\\n"
         "    --model       $MODEL \\\n"
-        "    --n_trials    $N_TRIALS \\\n"
+        "    --n-trials    $N_TRIALS \\\n"
         "    --epochs      $EPOCHS \\\n"
         "    --output      $OUTPUT_DIR/${PREFIX}_results.json \\\n"
         "    --ray-storage $RAY_RESULTS \\\n"

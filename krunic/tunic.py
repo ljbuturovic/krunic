@@ -985,6 +985,13 @@ def run_smoke_test(args):
             final=None,
             smoke_test=False,
             num_train_workers=1,
+            ray_address=None,
+            ray_storage=None,
+            tune_metric="val_auroc",
+            combine=False,
+            amp=False,
+            final_model="tunic_final.pt",
+            final_stats=None,
         )
 
         run_tuning(smoke_args)
@@ -1228,7 +1235,7 @@ def parse_args():
                    help="Any timm model name (e.g. resnet50, efficientnet_b0, convnext_tiny)")
     p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
                    help="Use timm pretrained weights")
-    p.add_argument("--n_trials", type=int, default=80, dest="n_trials",
+    p.add_argument("--n-trials", type=int, default=80, dest="n_trials",
                    help="Number of Optuna trials")
     p.add_argument("--epochs", type=int, default=30,
                    help="Training epochs per trial")
@@ -1244,10 +1251,10 @@ def parse_args():
                    help="DataLoader worker count")
     p.add_argument("--img-size", type=int, default=224, dest="img_size",
                    help="Input image resolution")
-    p.add_argument("--training_fraction", type=float, default=1.0,
+    p.add_argument("--training-fraction", type=float, default=1.0, dest="training_fraction",
                    help="Fraction of training data to use (e.g. 0.1 for 10%%); same subset across all trials")
-    p.add_argument("--val_fraction", type=float, default=None,
-                   help="Fraction of val data to use (defaults to --training_fraction)")
+    p.add_argument("--val-fraction", type=float, default=None, dest="val_fraction",
+                   help="Fraction of val data to use (defaults to --training-fraction)")
     p.add_argument("--freeze-backbone", type=int, default=0, dest="freeze_backbone",
                    help="Epochs to freeze backbone; 0 = no freeze")
     p.add_argument("--final", type=str, default=None,
@@ -1261,7 +1268,7 @@ def parse_args():
     p.add_argument("--final-stats", type=str, default=None, dest="final_stats",
                    help="Output filename for final training stats text file (optional)")
     p.add_argument("--resume", type=str, default=None,
-                   help="Path to a previous Ray Tune experiment directory; warm-starts Optuna search from those results and runs --n_trials new trials")
+                   help="Path to a previous Ray Tune experiment directory; warm-starts Optuna search from those results and runs --n-trials new trials")
     p.add_argument("--search-space", type=str, default=None, dest="search_space",
                    help="YAML file to override search space ranges")
     p.add_argument("--smoke-test", action="store_true", dest="smoke_test",
