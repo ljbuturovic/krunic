@@ -167,12 +167,12 @@ Saves PNG files alongside the results JSON.
 
 tunic auto-detects the dataset format:
 
-- **ImageFolder** — standard `split/class/image.ext` layout
-- **WebDataset** — sharded TAR files; detected when `wds/dataset_info.json` exists
+- **ImageFolder** - standard `split/class/image.ext` layout
+- **WebDataset** - sharded TAR files; detected when `wds/dataset_info.json` exists
 
 ## Scaling
 
-Concurrent trials = total GPUs. `--num-nodes 4 --accelerator T4:4` = 16 concurrent trials.
+Concurrent trials = total GPUs: `--num-nodes 4 --accelerator T4:4` --> 16 concurrent trials.
 
 Optuna's TPE needs ~20 trials before it outperforms random search. 32–64 trials is a practical range for most problems.
 
