@@ -167,8 +167,8 @@ Saves PNG files alongside the results JSON.
 
 tunic auto-detects the dataset format:
 
-- **ImageFolder** — standard `split/class/image.ext` layout
-- **WebDataset** — sharded TAR files; detected when `wds/dataset_info.json` exists
+- **ImageFolder** - standard `split/class/image.ext` layout
+- **WebDataset** - sharded TAR files; detected when `wds/dataset_info.json` exists
 
 ## Scaling
 
