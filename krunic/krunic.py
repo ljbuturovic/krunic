@@ -22,10 +22,16 @@ yaml.add_representer(_LiteralStr, _literal_representer)
 
 
 def parse_args():
+    from importlib.metadata import version as _version, PackageNotFoundError
+    try:
+        _ver = _version("krunic")
+    except PackageNotFoundError:
+        _ver = "dev"
     p = argparse.ArgumentParser(
-        description="krunic — launch tunic.py on a SkyPilot cluster",
+        description=f"krunic {_ver} — launch tunic.py on a SkyPilot cluster",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    p.add_argument("--version", action="version", version=f"%(prog)s {_ver}")
     p.add_argument("--cluster",       type=str, required=True,                        dest="cluster",       help="SkyPilot cluster name")
     p.add_argument("--cloud",         type=str, default="aws",                        dest="cloud",         help="Cloud provider")
     p.add_argument("--accelerator",   type=str, default="T4:4",                       dest="accelerator",   help="Accelerator spec (e.g. T4:4, A10G:1)")

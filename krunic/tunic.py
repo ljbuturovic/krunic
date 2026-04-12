@@ -1226,10 +1226,16 @@ def run_tuning(args):
 # ---------------------------------------------------------------------------
 
 def parse_args():
+    from importlib.metadata import version as _version, PackageNotFoundError
+    try:
+        _ver = _version("krunic")
+    except PackageNotFoundError:
+        _ver = "dev"
     p = argparse.ArgumentParser(
-        description="tunic — hyperparameter tuning for image classifiers",
+        description=f"tunic {_ver} — hyperparameter tuning for image classifiers",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    p.add_argument("--version", action="version", version=f"%(prog)s {_ver}")
     p.add_argument("--data", type=str, help="Path to dataset root (ImageFolder layout)")
     p.add_argument("--model", type=str, default=None,
                    help="Any timm model name (e.g. resnet50, efficientnet_b0, convnext_tiny)")
