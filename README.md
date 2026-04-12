@@ -41,7 +41,7 @@ $ krunic \
 
 SkyPilot creates the cluster, Ray distributes the load across the GPUs. In my experiments, it achieves near-perfect utilization:
 
-![Description](pcam14_GPU_load.png)
+![Description](https://raw.githubusercontent.com/ljbuturovic/krunic/main/pcam14_GPU_load.png)
 
 
 Upon completion, get the best model hyperparameters:
@@ -53,7 +53,7 @@ $ aws s3 cp s3://image.data/ray-results/tin6/kaws_results.json .
 ```bash
 $ tunic-plotter kaws_results.json
 ```
-![Description](tin5_results_val_acc.png)
+![Description](https://raw.githubusercontent.com/ljbuturovic/krunic/main/tin5_results_val_acc.png)
 
 Remember to take down the cluster after downloading the results. 
 
