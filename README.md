@@ -2,6 +2,8 @@
 
 Automated hyperparameter search for image classifiers - from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
+krunic uses off-the-shelf models and packages, so you won't get SOTA performance. That said, it can get surprisingly close, with almost zero effort. Useful as a baseline, or experimentation with architectures, GPUs etc.
+
 Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), [timm](https://github.com/huggingface/pytorch-image-models), and [SkyPilot](https://skypilot.readthedocs.io/).
 
 ## Install (Mac and Linux)
