@@ -1,6 +1,6 @@
 # krunic
 
-Automated hyperparameter search for image classifiers — from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
+Automated hyperparameter search for image classifiers - from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
 Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](https://optuna.org/), [timm](https://github.com/huggingface/pytorch-image-models), and [SkyPilot](https://skypilot.readthedocs.io/).
 
@@ -10,7 +10,7 @@ Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](htt
 $ pipx install krunic
 ```
 
-This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The command takes couple of minutes. 
+This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The command takes a couple of minutes. 
 
 ## Quick start
 
@@ -95,7 +95,7 @@ All runs use generic off-the-shelf models with no domain-specific modifications.
 
 Override any part with a YAML file via `--search-space`.
 
-## tunic — local hyperparameter search
+## tunic - local hyperparameter search
 
 ```
 tunic --data PATH --model MODEL [options]
@@ -119,7 +119,7 @@ tunic --data PATH --model MODEL [options]
 | `--device` | `auto` | `auto`, `cuda`, `mps`, or `cpu` |
 | `--smoke-test` | | Quick end-to-end test with synthetic data |
 
-## krunic — cloud launcher
+## krunic - cloud launcher
 
 krunic generates a SkyPilot YAML and launches the job. The dataset is S3-mounted (or copied); results are uploaded to S3 when the job completes.
 
@@ -153,7 +153,7 @@ krunic --cluster NAME --workdir DIR --s3-path PATH --model MODEL [options]
 
 Results are uploaded to `s3://<bucket>/ray-results/<prefix>/<prefix>_results.json`.
 
-## tunic-plotter — visualize results
+## tunic-plotter - visualize results
 
 ```bash
 tunic-plotter results.json                  # plots val_auroc and val_acc
