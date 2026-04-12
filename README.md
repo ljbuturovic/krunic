@@ -123,7 +123,40 @@ tunic --data PATH --model MODEL [options]
 
 krunic generates a SkyPilot YAML and launches the job. The dataset is S3-mounted (or copied); results are uploaded to S3 when the job completes.
 
-**Prerequisites:** SkyPilot configured with AWS credentials; dataset in S3.
+### Prerequisites
+
+**1. AWS credentials**
+
+```bash
+aws configure
+```
+
+Prompts for your Access Key ID, Secret Access Key, and region (e.g. `us-east-1`). Your IAM user needs EC2 and S3 permissions. SkyPilot uses these credentials directly — no separate SkyPilot account or configuration needed.
+
+**2. Verify SkyPilot sees AWS**
+
+```bash
+sky check
+```
+
+Should show `AWS: enabled`.
+
+**3. Dataset in S3**
+
+```bash
+aws s3 sync ~/image_data/my-dataset s3://my-bucket/my-dataset
+```
+
+### Monitor and tear down
+
+krunic launches the cluster and streams logs. Once the job completes, download results and tear down:
+
+```bash
+sky status                          # check cluster state
+sky logs my-cluster 1               # stream logs (job ID increments with each run)
+aws s3 cp s3://my-bucket/ray-results/prefix/prefix_results.json .
+yes | sky down my-cluster           # terminate cluster
+```
 
 `--workdir` defaults to the installed package directory (contains `tunic.py` and `requirements.txt`). Override it only if you are developing from a local source checkout and want to test unpublished changes.
 
