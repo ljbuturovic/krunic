@@ -1,5 +1,7 @@
 # krunic
 
+[![tests](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml/badge.svg)](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml)
+
 Automated hyperparameter search for image classifiers - from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
 krunic uses off-the-shelf models and packages, so you won't get SOTA performance. That said, it can get surprisingly close, with almost zero effort. Useful as a baseline, or experimentation with architectures, GPUs etc.
