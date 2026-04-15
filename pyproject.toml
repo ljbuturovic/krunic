@@ -28,6 +28,9 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 include = ["krunic/*.py", "krunic/requirements.txt"]
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
 [project.scripts]
 tunic = "krunic.tunic:main"
 krunic = "krunic.krunic:main"
