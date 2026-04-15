@@ -7,7 +7,7 @@ name = "krunic"
 version = "0.1.4"
 description = "Hyperparameter search for image classifiers using Ray Tune + SkyPilot"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "argparse>=1.4.0",
     "gdown>=5.2.1",

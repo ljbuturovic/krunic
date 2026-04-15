@@ -12,11 +12,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: "3.10"
 
       - name: Install (CPU torch)
         run: |
-          uv venv .venv --python 3.12 --clear
+          uv venv .venv --python 3.10 --clear
           uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
           uv pip install --python .venv/bin/python -e ".[dev]"
 
