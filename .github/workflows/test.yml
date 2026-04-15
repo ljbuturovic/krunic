@@ -16,8 +16,9 @@ jobs:
 
       - name: Install (CPU torch)
         run: |
-          uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -e ".[dev]"
+          uv venv .venv
+          uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --python .venv/bin/python -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/ -v -x -k "not test_smoke"
+        run: .venv/bin/pytest tests/ -v -x -k "not test_smoke"
