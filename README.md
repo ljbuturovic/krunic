@@ -66,7 +66,7 @@ $ yes | sky down skya
 ```
 
 
-**Train final model from tuning results:**
+**Train final model from tuning results (locally):**
 ```bash
 $ tunic --final kaws_results.json --data /path/to/dataset --epochs 50 --amp
 ```
@@ -135,7 +135,7 @@ krunic generates a SkyPilot YAML and launches the job. The dataset is S3-mounted
 aws configure
 ```
 
-Prompts for your Access Key ID, Secret Access Key, and region (e.g. `us-east-1`). Your IAM user needs EC2 and S3 permissions. SkyPilot uses these credentials directly — no separate SkyPilot account or configuration needed.
+Prompts for your Access Key ID, Secret Access Key, and region (e.g. `us-east-1`). Your IAM user needs EC2 and S3 permissions. SkyPilot uses these credentials directly - no separate SkyPilot account or configuration needed.
 
 **2. Verify SkyPilot sees AWS**
 
