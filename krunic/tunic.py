@@ -1003,7 +1003,6 @@ def run_smoke_test(args):
         run_final(smoke_final_args)
 
     logger.info("Smoke test passed.")
-    sys.exit(0)
 
 
 # ---------------------------------------------------------------------------
