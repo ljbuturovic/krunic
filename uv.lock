@@ -1193,6 +1193,15 @@ wheels = [
 ]
 
 [[package]]
+name = "iniconfig"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
+]
+
+[[package]]
 name = "invoke"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1343,6 +1352,52 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/06/7399a607f434119c6e1fdc8ec89a8d51ccccadf3341dee4ead6bd14caaf5/kiwisolver-1.5.0-graalpy312-graalpy250_312_native-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c31c13da98624f957b0fb1b5bae5383b2333c2c3f6793d9825dd5ce79b525cb7", size = 194295, upload-time = "2026-03-09T13:15:38.22Z" },
     { url = "https://files.pythonhosted.org/packages/b5/91/53255615acd2a1eaca307ede3c90eb550bae9c94581f8c00081b6b1c8f44/kiwisolver-1.5.0-graalpy312-graalpy250_312_native-win_amd64.whl", hash = "sha256:1f1489f769582498610e015a8ef2d36f28f505ab3096d0e16b4858a9ec214f57", size = 75987, upload-time = "2026-03-09T13:15:39.65Z" },
 ]
+
+[[package]]
+name = "krunic"
+version = "0.1.7"
+source = { editable = "." }
+dependencies = [
+    { name = "argparse" },
+    { name = "gdown" },
+    { name = "h5py" },
+    { name = "matplotlib" },
+    { name = "medmnist" },
+    { name = "numpy" },
+    { name = "optuna" },
+    { name = "pillow" },
+    { name = "ray", extra = ["train", "tune"] },
+    { name = "scikit-learn" },
+    { name = "skypilot", extra = ["aws", "lambda"] },
+    { name = "timm" },
+    { name = "torch" },
+    { name = "webdataset" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argparse", specifier = ">=1.4.0" },
+    { name = "gdown", specifier = ">=5.2.1" },
+    { name = "h5py", specifier = ">=3.16.0" },
+    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "medmnist", specifier = ">=3.0.2" },
+    { name = "numpy", specifier = ">=2.4.3" },
+    { name = "optuna", specifier = ">=4.7.0" },
+    { name = "pillow", specifier = ">=12.1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "ray", extras = ["train", "tune"], specifier = ">=2.54.0" },
+    { name = "scikit-learn", specifier = ">=1.8.0" },
+    { name = "skypilot", extras = ["aws", "lambda"], specifier = "==0.12.0" },
+    { name = "timm", specifier = ">=1.0.25" },
+    { name = "torch", specifier = ">=2.0.0" },
+    { name = "webdataset", specifier = ">=1.0.2" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "lazy-loader"
@@ -2152,6 +2207,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
 name = "prettytable"
 version = "3.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2578,6 +2642,22 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bd/11/293dd436aea955d45fc4e8a35b6ae7270f5b8e00b53cf6c024c83b657a11/PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0", size = 284429, upload-time = "2019-09-20T02:07:35.714Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8d/59/b4572118e098ac8e46e399a1dd0f2d85403ce8bbaad9ec79373ed6badaf9/PySocks-1.7.1-py3-none-any.whl", hash = "sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5", size = 16725, upload-time = "2019-09-20T02:06:22.938Z" },
+]
+
+[[package]]
+name = "pytest"
+version = "9.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7d/0d/549bd94f1a0a402dc8cf64563a117c0f3765662e2e668477624baeec44d5/pytest-9.0.3.tar.gz", hash = "sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c", size = 1572165, upload-time = "2026-04-07T17:16:18.027Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9", size = 375249, upload-time = "2026-04-07T17:16:16.13Z" },
 ]
 
 [[package]]
@@ -3131,7 +3211,7 @@ wheels = [
 
 [[package]]
 name = "skypilot"
-version = "0.11.2"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -3184,9 +3264,9 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "wheel" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/9e/23f502d52c1e53fb1e5313e9b656cd061b3517b6ad6454ed7e9234491c48/skypilot-0.11.2.tar.gz", hash = "sha256:9bbe81b5bc74996ee6a0c2e5fe052c386db260eb2cbde1de17b43d84d4096cd7", size = 2858708, upload-time = "2026-03-03T22:36:26.847Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/d1/c8d4aa096e16264e59d9fae5ef4ff800923734dd2e44c63cfdded09d0784/skypilot-0.12.0.tar.gz", hash = "sha256:fd9dccd3582a8f537e068ca41797ca15e7034d837262fa3dab98a4d81abbc66f", size = 3117896, upload-time = "2026-03-24T01:08:15.648Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/93/e4bd02072454c024d60fba3e8972f2b6fca0a19b9712533e9ca0956e056b/skypilot-0.11.2-py3-none-any.whl", hash = "sha256:0d8292e0a250816e96dce37bd3942f97ada9992cfcc47721effb63e6c19ab532", size = 3144980, upload-time = "2026-03-03T22:36:24.125Z" },
+    { url = "https://files.pythonhosted.org/packages/95/c6/458ac91086fdc2e39671a65b0280fa00030c6056b182399b9d1e6402ac27/skypilot-0.12.0-py3-none-any.whl", hash = "sha256:4f94be114ef33d6930a2e72ffeae58aa2e2297e025dc5c4b28c2a626798728c3", size = 3434758, upload-time = "2026-03-24T01:08:12.708Z" },
 ]
 
 [package.optional-dependencies]
@@ -3199,6 +3279,17 @@ aws = [
     { name = "botocore" },
     { name = "casbin" },
     { name = "colorama" },
+    { name = "grpcio" },
+    { name = "passlib" },
+    { name = "protobuf" },
+    { name = "pyjwt" },
+    { name = "sqlalchemy-adapter" },
+]
+lambda = [
+    { name = "aiohttp" },
+    { name = "aiosqlite" },
+    { name = "anyio" },
+    { name = "casbin" },
     { name = "grpcio" },
     { name = "passlib" },
     { name = "protobuf" },
@@ -3467,45 +3558,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d0/66/b1eb52839f563623d185f0927eb3530ee4d5ffe9d377cdaf5346b306689e/triton-3.4.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:31c1d84a5c0ec2c0f8e8a072d7fd150cab84a9c239eaddc6706c081bfae4eb04", size = 155560068, upload-time = "2025-07-30T19:58:37.081Z" },
     { url = "https://files.pythonhosted.org/packages/30/7b/0a685684ed5322d2af0bddefed7906674f67974aa88b0fae6e82e3b766f6/triton-3.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:00be2964616f4c619193cb0d1b29a99bd4b001d7dc333816073f92cf2a8ccdeb", size = 155569223, upload-time = "2025-07-30T19:58:44.017Z" },
     { url = "https://files.pythonhosted.org/packages/20/63/8cb444ad5cdb25d999b7d647abac25af0ee37d292afc009940c05b82dda0/triton-3.4.0-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7936b18a3499ed62059414d7df563e6c163c5e16c3773678a3ee3d417865035d", size = 155659780, upload-time = "2025-07-30T19:58:51.171Z" },
-]
-
-[[package]]
-name = "tunic"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "argparse" },
-    { name = "gdown" },
-    { name = "h5py" },
-    { name = "matplotlib" },
-    { name = "medmnist" },
-    { name = "numpy" },
-    { name = "optuna" },
-    { name = "pillow" },
-    { name = "ray", extra = ["train", "tune"] },
-    { name = "scikit-learn" },
-    { name = "skypilot", extra = ["aws"] },
-    { name = "timm" },
-    { name = "torch" },
-    { name = "webdataset" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "argparse", specifier = ">=1.4.0" },
-    { name = "gdown", specifier = ">=5.2.1" },
-    { name = "h5py", specifier = ">=3.16.0" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
-    { name = "medmnist", specifier = ">=3.0.2" },
-    { name = "numpy", specifier = ">=2.4.3" },
-    { name = "optuna", specifier = ">=4.7.0" },
-    { name = "pillow", specifier = ">=12.1.1" },
-    { name = "ray", extras = ["train", "tune"], specifier = ">=2.54.0" },
-    { name = "scikit-learn", specifier = ">=1.8.0" },
-    { name = "skypilot", extras = ["aws"], specifier = ">=0.11.2" },
-    { name = "timm", specifier = ">=1.0.25" },
-    { name = "torch", specifier = "==2.8.0" },
-    { name = "webdataset", specifier = ">=1.0.2" },
 ]
 
 [[package]]
