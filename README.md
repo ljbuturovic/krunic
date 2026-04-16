@@ -18,12 +18,12 @@ This installs three commands: `tunic` (local training), `krunic` (cloud launcher
 
 ## Install (Windows)
 
-This is untested because I don't have Windows access. But I'm guessing should work:
+Note: 1. This is untested because I don't have Windows access. But I'm guessing it should work. 2. The SkyPilot support for Windows is poor. Thus, only the tunic (local classifier tuning) should work
 
 ```bash
 winget install Python.Python.3   # if Python not already installed
-pip install pipx
-pipx ensurepath                  # restart terminal after this
+py -m pip install --user pipx
+py -m pipx ensurepath            # restart terminal after this
 pipx install krunic
 ```
 
