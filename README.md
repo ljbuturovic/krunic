@@ -16,6 +16,17 @@ $ pipx install krunic
 
 This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The command takes a couple of minutes. 
 
+## Install (Windows)
+
+This is untested because I don't have Windows access. But I'm guessing should work:
+
+```bash
+winget install Python.Python.3   # if Python not already installed
+pip install pipx
+pipx ensurepath                  # restart terminal after this
+pipx install krunic
+```
+
 ## Quick start
 
 **Local:**
