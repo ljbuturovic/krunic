@@ -515,6 +515,7 @@ def train_func_distributed(config: dict):
     mixup_alpha = config["mixup_alpha"]
     cutmix_alpha = config["cutmix_alpha"]
     optimizer_name = config["optimizer"]
+    use_amp = config.get("use_amp", False)
 
     rank = ray.train.get_context().get_world_rank()
     world_size = ray.train.get_context().get_world_size()
@@ -563,6 +564,7 @@ def train_func_distributed(config: dict):
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
                 use_soft_labels=use_mixup_cutmix, trial_id=trial_id, epoch=epoch, epochs=epochs,
+                use_amp=use_amp,
             )
             val_loss, val_acc, val_auroc = _evaluate_distributed(
                 model, val_loader, val_criterion, device, world_size,
@@ -637,6 +639,7 @@ def _tune_trial(config: dict):
         criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
         val_criterion = nn.CrossEntropyLoss()
 
+        use_amp = config.get("use_amp", False)
         for epoch in range(epochs):
             if config["freeze_backbone"] > 0 and epoch == config["freeze_backbone"]:
                 unfreeze_all(model)
@@ -645,8 +648,9 @@ def _tune_trial(config: dict):
             train_loss, train_acc = train_one_epoch(
                 model, train_loader, optimizer, scheduler, criterion, device,
                 use_soft_labels=use_mixup_cutmix, trial_id=trial_id, epoch=epoch, epochs=epochs,
+                use_amp=use_amp,
             )
-            _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device)
+            _, val_acc, val_auroc = evaluate(model, val_loader, val_criterion, device, use_amp=use_amp)
 
             tune.report({"val_acc": val_acc, "val_auroc": val_auroc, "train_loss": train_loss})
 
@@ -1068,6 +1072,7 @@ def run_tuning(args):
         "val_fraction": args.val_fraction,
         "num_classes": num_classes,
         "device": args.device,
+        "use_amp": args.amp,
         "n_trials": args.n_trials,
         "lr":                    tune.loguniform(ss.get("lr_min", 1e-5),    ss.get("lr_max", 1e-1)),
         "weight_decay":          tune.loguniform(ss.get("wd_min", 1e-6),    ss.get("wd_max", 1e-2)),

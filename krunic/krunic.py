@@ -34,7 +34,7 @@ def parse_args():
     p.add_argument("--version", action="version", version=f"%(prog)s {_ver}")
     p.add_argument("--cluster",       type=str, required=True,                        dest="cluster",       help="SkyPilot cluster name")
     p.add_argument("--cloud",         type=str, default="aws",                        dest="cloud",         help="Cloud provider")
-    p.add_argument("--accelerator",   type=str, default="T4:4",                       dest="accelerator",   help="Accelerator spec (e.g. T4:4, A10G:1)")
+    p.add_argument("--accelerator",   type=str, default="T4:4",                       dest="accelerator",   help="Accelerator spec (e.g. T4:4, A10G:1, A100:8, H100:8)")
     p.add_argument("--num-nodes",     type=int, default=1,                            dest="num_nodes",     help="Number of cluster nodes")
     p.add_argument("--disk-size",     type=int, default=200,                          dest="disk_size",     help="Disk size in GB per node")
     p.add_argument("--spot",          action="store_true",                            dest="spot",          help="Use spot instances")
