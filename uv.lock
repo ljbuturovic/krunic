@@ -1355,7 +1355,7 @@ wheels = [
 
 [[package]]
 name = "krunic"
-version = "0.1.7"
+version = "0.1.10"
 source = { editable = "." }
 dependencies = [
     { name = "argparse" },
