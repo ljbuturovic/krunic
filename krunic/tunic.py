@@ -66,6 +66,10 @@ def set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 
+def get_amp_dtype() -> torch.dtype:
+    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+
 def get_device(device_str: str) -> torch.device:
     if device_str == "auto":
         if torch.cuda.is_available():
@@ -368,7 +372,8 @@ def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_
     correct = 0
     total = 0
     use_amp = use_amp and device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    amp_dtype = get_amp_dtype()
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype == torch.float16)
 
     epoch_str = f" epoch {epoch+1}/{epochs}" if epochs else ""
     desc = f"trial {trial_id}{epoch_str}" if trial_id else f"train{epoch_str}"
@@ -377,7 +382,7 @@ def train_one_epoch(model, loader, optimizer, scheduler, criterion, device, use_
     for images, labels in bar:
         images = images.to(device)
         optimizer.zero_grad()
-        with torch.autocast(device_type=device.type, enabled=use_amp):
+        with torch.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
             outputs = model(images)
             if use_soft_labels and labels.dim() == 2:
                 labels = labels.to(device)
@@ -432,7 +437,7 @@ def evaluate(model, loader, criterion, device, use_amp=False):
     with torch.no_grad():
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
-            with torch.autocast(device_type=device.type, enabled=use_amp):
+            with torch.autocast(device_type=device.type, dtype=get_amp_dtype(), enabled=use_amp):
                 outputs = model(images)
                 loss_val = criterion(outputs, labels)
             total_loss += loss_val.item() * images.size(0)
@@ -878,6 +883,11 @@ def run_final(args):
     criterion = nn.CrossEntropyLoss(label_smoothing=params.get("label_smoothing", 0.0))
     val_criterion = nn.CrossEntropyLoss()
 
+    if args.amp:
+        _amp_dtype = get_amp_dtype()
+        _amp_label = "BF16" if _amp_dtype == torch.bfloat16 else "FP16"
+        logger.info(f"AMP enabled: {_amp_label}")
+
     best_val_auroc = 0.0
     best_val_acc = 0.0
     best_epoch = 0
@@ -1046,6 +1056,10 @@ def run_tuning(args):
         data_key = str(data_path.resolve())
 
     logger.info(f"Dataset: {data_root} | Format: {data_format} | Classes: {num_classes} | Model: {args.model}")
+    if args.amp:
+        _amp_dtype = get_amp_dtype()
+        _amp_label = "BF16" if _amp_dtype == torch.bfloat16 else "FP16"
+        logger.info(f"AMP enabled: {_amp_label}")
 
     ss = {}
     if args.search_space:
