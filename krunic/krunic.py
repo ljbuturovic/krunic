@@ -96,7 +96,7 @@ def build_yaml(args) -> dict:
         "curl -LsSf https://astral.sh/uv/install.sh | sh\n"
         "source $HOME/.local/bin/env\n"
         "uv venv --python 3.12 --clear ~/venv\n"
-        "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/requirements.txt awscli\n"
+        "uv pip install --python ~/venv/bin/python -r ~/sky_workdir/cluster_requirements.txt awscli\n"
     )
     _setup_s3_copy = (
         "mkdir -p $DATA_DIR\n"
