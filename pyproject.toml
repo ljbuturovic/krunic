@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "krunic"
-version = "0.1.9"
+version = "0.1.10"
 description = "Hyperparameter search for image classifiers using Ray Tune + SkyPilot"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-include = ["krunic/*.py", "krunic/requirements.txt"]
+include = ["krunic/*.py", "krunic/cluster_requirements.txt"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]

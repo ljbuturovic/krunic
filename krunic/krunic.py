@@ -57,7 +57,7 @@ def parse_args():
 
 def build_yaml(args) -> dict:
     workdir = str(Path(args.workdir).expanduser())
-    requirements_path = Path(args.requirements).expanduser() if args.requirements else Path(workdir) / "requirements.txt"
+    requirements_path = Path(args.requirements).expanduser() if args.requirements else Path(workdir) / "cluster_requirements.txt"
 
     resources = {
         "cloud": args.cloud,
