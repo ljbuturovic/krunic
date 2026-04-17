@@ -80,6 +80,19 @@ def main():
 
     trials = data["all_trials"]
 
+    model   = data.get("model", "?")
+    auroc   = data.get("best_val_auroc")
+    acc     = data.get("best_val_acc")
+    n_done  = data.get("completed_trials", len(trials))
+    n_total = data.get("n_trials", len(trials))
+    epochs  = data.get("epochs", "?")
+    auroc_str = f"{auroc:.4f}" if auroc is not None else "n/a"
+    acc_str   = f"{acc:.4f}"   if acc   is not None else "n/a"
+    print(f"Model:   {model}")
+    print(f"Trials:  {n_done}/{n_total}  |  Epochs: {epochs}")
+    print(f"Best AUROC:    {auroc_str}")
+    print(f"Best Accuracy: {acc_str}")
+
     if args.metric == "val_auroc":
         # default: plot both
         plot_metric(data, trials, "val_auroc", args.results_file, args.trial_sort)
