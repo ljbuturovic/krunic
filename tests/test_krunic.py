@@ -27,6 +27,7 @@ def make_args(**kwargs):
         no_autostop=False,
         tune_metric="val_auroc",
         batch_size=32,
+        amp=False,
     )
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
