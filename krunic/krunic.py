@@ -52,6 +52,7 @@ def parse_args():
     p.add_argument("--no-autostop",   action="store_true",                            dest="no_autostop",   help="Disable auto-stop; cluster stays up after job finishes")
     p.add_argument("--tune-metric",   type=str, default="val_auroc",                  dest="tune_metric",   help="Metric used by Optuna and ASHA for trial selection (default: val_auroc)")
     p.add_argument("--batch-size",    type=int, default=32,                            dest="batch_size",    help="Batch size per trial (default: 32)")
+    p.add_argument("--amp",           action="store_true",                            dest="amp",           help="Enable automatic mixed precision (BF16 on H100/A100, FP16 on older GPUs)")
     return p.parse_args()
 
 
@@ -88,6 +89,7 @@ def build_yaml(args) -> dict:
         "TRAINING_FRACTION":  str(args.training_fraction),
         "TUNE_METRIC":        args.tune_metric,
         "BATCH_SIZE":         str(args.batch_size),
+        "AMP":                "1" if args.amp else "0",
     }
 
     _setup_start = (
@@ -167,7 +169,8 @@ def build_yaml(args) -> dict:
         + _training_fraction_arg +
         "    --tune-metric $TUNE_METRIC \\\n"
         "    --batch-size  $BATCH_SIZE \\\n"
-        "    --device      auto\n"
+        "    --device      auto \\\n"
+        "    $([ \"$AMP\" = \"1\" ] && echo --amp)\n"
         "\n"
         "  ~/venv/bin/aws s3 cp $OUTPUT_DIR/${PREFIX}_results.json $RAY_RESULTS/${PREFIX}_results.json\n"
         "  ~/venv/bin/python -c \"\n"
