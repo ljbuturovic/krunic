@@ -1012,7 +1012,7 @@ def run_smoke_test(args):
 
         # Final mode
         smoke_final_args = argparse.Namespace(**vars(smoke_args))
-        smoke_final_args.final = smoke_args.output
+        smoke_final_args.final = f"{smoke_args.prefix}.json"
         smoke_final_args.epochs = 2
         run_final(smoke_final_args)
 
@@ -1115,7 +1115,7 @@ def run_tuning(args):
     if args.ray_storage:
         storage_path = args.ray_storage
     else:
-        storage_path = str(Path(args.output).parent.resolve() / "ray_results")
+        storage_path = str(Path(f"{args.prefix}.json").parent.resolve() / "ray_results")
 
     class _IntermediateResultsCallback(tune.Callback):
         def __init__(self):
@@ -1144,7 +1144,7 @@ def run_tuning(args):
                 "all_trials":       self.completed,
                 "status":           "in_progress",
             }
-            with open(args.output, "w") as f:
+            with open(f"{args.prefix}.json", "w") as f:
                 json.dump(snapshot, f, indent=2)
 
     run_config = RunConfig(
@@ -1229,14 +1229,14 @@ def run_tuning(args):
         "all_trials": all_trials,
     }
 
-    with open(args.output, "w") as f:
+    with open(f"{args.prefix}.json", "w") as f:
         json.dump(output, f, indent=2)
 
     print(f"\nBest val accuracy: {best_val_acc:.4f}  AUROC: {best_val_auroc:.4f}")
     print("Best params:")
     for k, v in best_params.items():
         print(f"  {k}: {v}")
-    print(f"\nResults saved to: {args.output}")
+    print(f"\nResults saved to: {args.prefix}.json")
 
 
 # ---------------------------------------------------------------------------
@@ -1265,8 +1265,8 @@ def parse_args():
                    help="Training epochs per trial")
     p.add_argument("--batch-size", type=int, default=32, dest="batch_size",
                    help="Batch size (fixed across trials)")
-    p.add_argument("--output", type=str, default="tunic_results.json",
-                   help="Path for output JSON with best hyperparameters (default: tunic_results.json)")
+    p.add_argument("--prefix", type=str, default="tunic",
+                   help="Prefix for output files (e.g. --prefix myrun → myrun.json)")
     p.add_argument("--seed", type=int, default=42,
                    help="Random seed for reproducibility")
     p.add_argument("--device", type=str, default="auto",
