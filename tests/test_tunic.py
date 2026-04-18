@@ -178,6 +178,26 @@ def test_cli_dash_args(monkeypatch):
     assert args.training_fraction == pytest.approx(0.1)
 
 
+def test_cli_amp_flag(monkeypatch):
+    import sys
+    from krunic.tunic import parse_args
+    monkeypatch.setattr(sys, "argv", [
+        "tunic", "--data", "/tmp", "--model", "resnet18", "--amp",
+    ])
+    args = parse_args()
+    assert args.amp is True
+
+
+def test_cli_prefix(monkeypatch):
+    import sys
+    from krunic.tunic import parse_args
+    monkeypatch.setattr(sys, "argv", [
+        "tunic", "--data", "/tmp", "--model", "resnet18", "--prefix", "myrun",
+    ])
+    args = parse_args()
+    assert args.prefix == "myrun"
+
+
 # ---------------------------------------------------------------------------
 # smoke test (CPU, end-to-end)
 # ---------------------------------------------------------------------------

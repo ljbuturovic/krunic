@@ -79,3 +79,22 @@ def test_build_yaml_s3_path():
     data = build_yaml(make_args(bucket="my-bucket", prefix="exp1"))
     assert "my-bucket" in data["envs"]["RAY_RESULTS"]
     assert "exp1" in data["envs"]["RAY_RESULTS"]
+
+
+def test_build_yaml_amp_enabled():
+    from krunic.krunic import build_yaml
+    data = build_yaml(make_args(amp=True))
+    assert data["envs"]["AMP"] == "1"
+
+
+def test_build_yaml_amp_disabled():
+    from krunic.krunic import build_yaml
+    data = build_yaml(make_args(amp=False))
+    assert data["envs"]["AMP"] == "0"
+
+
+def test_build_yaml_prefix():
+    from krunic.krunic import build_yaml
+    data = build_yaml(make_args(prefix="myexp"))
+    assert data["envs"]["PREFIX"] == "myexp"
+    assert "$PREFIX" in data["run"]
