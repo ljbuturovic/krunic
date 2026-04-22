@@ -35,3 +35,4 @@ dev = ["pytest>=7.0"]
 tunic = "krunic.tunic:main"
 krunic = "krunic.krunic:main"
 tunic-plotter = "krunic.tunic_plotter:main"
+cvic = "krunic.cvic:main"
