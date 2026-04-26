@@ -54,7 +54,7 @@ $ krunic \
   --prefix kaws
 ```
 
-SkyPilot creates the cluster, Ray distributes the load across the GPUs. In my experiments, it achieves near-perfect utilization:
+SkyPilot creates the cluster, Ray distributes the load across the GPUs. In my experiments, it achieves very good GPU utilization:
 
 ![Description](https://raw.githubusercontent.com/ljbuturovic/krunic/main/pcam14_GPU_load.png)
 
