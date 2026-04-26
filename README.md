@@ -14,7 +14,7 @@ Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](htt
 $ pipx install krunic
 ```
 
-This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The command takes a couple of minutes. 
+This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The installation takes a couple of minutes. 
 
 ## Install (Windows)
 
