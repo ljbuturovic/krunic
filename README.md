@@ -1,6 +1,7 @@
 # krunic
 
 [![tests](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml/badge.svg)](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Automated hyperparameter search for image classifiers - from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
