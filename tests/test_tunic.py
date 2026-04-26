@@ -34,7 +34,7 @@ def test_detect_format_webdataset(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_load_search_space_overrides(tmp_path):
-    from krunic.tunic import load_search_space_overrides
+    from krunic.common_krunic import load_search_space_overrides
     f = tmp_path / "ss.yaml"
     f.write_text("lr: [0.001, 0.01]\noptimizer: [AdamW]\n")
     result = load_search_space_overrides(str(f))
@@ -43,7 +43,7 @@ def test_load_search_space_overrides(tmp_path):
 
 
 def test_load_search_space_overrides_empty(tmp_path):
-    from krunic.tunic import load_search_space_overrides
+    from krunic.common_krunic import load_search_space_overrides
     f = tmp_path / "empty.yaml"
     f.write_text("")
     assert load_search_space_overrides(str(f)) == {}
@@ -54,14 +54,14 @@ def test_load_search_space_overrides_empty(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_compute_auroc_binary_perfect():
-    from krunic.tunic import _compute_auroc
+    from krunic.common_krunic import _compute_auroc
     probs = np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0]])
     labels = np.array([0, 0, 1, 1])
     assert _compute_auroc(probs, labels) == 1.0
 
 
 def test_compute_auroc_binary_random():
-    from krunic.tunic import _compute_auroc
+    from krunic.common_krunic import _compute_auroc
     probs = np.array([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]])
     labels = np.array([0, 0, 1, 1])
     auroc = _compute_auroc(probs, labels)
@@ -69,7 +69,7 @@ def test_compute_auroc_binary_random():
 
 
 def test_compute_auroc_multiclass():
-    from krunic.tunic import _compute_auroc
+    from krunic.common_krunic import _compute_auroc
     # 3-class, each class perfectly predicted
     probs = np.array([
         [1.0, 0.0, 0.0],
@@ -83,7 +83,7 @@ def test_compute_auroc_multiclass():
 
 
 def test_compute_auroc_single_class_returns_nan():
-    from krunic.tunic import _compute_auroc
+    from krunic.common_krunic import _compute_auroc
     # Only one class present — undefined AUROC
     probs = np.array([[1.0, 0.0], [0.9, 0.1], [0.8, 0.2]])
     labels = np.array([0, 0, 0])
@@ -95,7 +95,7 @@ def test_compute_auroc_single_class_returns_nan():
 # ---------------------------------------------------------------------------
 
 def test_build_transforms_train_output_shape():
-    from krunic.tunic import build_transforms
+    from krunic.common_krunic import build_transforms
     from PIL import Image
     tf = build_transforms(img_size=64, randaug_magnitude=0, is_train=True)
     img = Image.fromarray(np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8))
@@ -104,7 +104,7 @@ def test_build_transforms_train_output_shape():
 
 
 def test_build_transforms_val_output_shape():
-    from krunic.tunic import build_transforms
+    from krunic.common_krunic import build_transforms
     from PIL import Image
     tf = build_transforms(img_size=64, is_train=False)
     img = Image.fromarray(np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8))
@@ -113,7 +113,7 @@ def test_build_transforms_val_output_shape():
 
 
 def test_build_transforms_normalized():
-    from krunic.tunic import build_transforms
+    from krunic.common_krunic import build_transforms
     from PIL import Image
     tf = build_transforms(img_size=64, is_train=False)
     img = Image.fromarray(np.full((128, 128, 3), 128, dtype=np.uint8))
@@ -128,7 +128,7 @@ def test_build_transforms_normalized():
 
 def test_make_stratified_split_sizes(tmp_path):
     from torchvision import datasets
-    from krunic.tunic import make_stratified_split
+    from krunic.common_krunic import make_stratified_split
     # Build a tiny imagefolder with 3 classes, 10 images each
     for cls in ["a", "b", "c"]:
         d = tmp_path / cls
@@ -144,7 +144,7 @@ def test_make_stratified_split_sizes(tmp_path):
 
 def test_make_stratified_split_reproducible(tmp_path):
     from torchvision import datasets
-    from krunic.tunic import make_stratified_split
+    from krunic.common_krunic import make_stratified_split
     for cls in ["a", "b"]:
         d = tmp_path / cls
         d.mkdir()

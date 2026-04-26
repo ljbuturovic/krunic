@@ -8,65 +8,51 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-import optuna
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
-
-try:
-    from tqdm import tqdm
-except ImportError:
-    def tqdm(it, **kwargs):
-        return it
-
-try:
-    import ray
-    from ray import tune
-    from ray.tune.search.optuna import OptunaSearch
-    from ray.tune import RunConfig
-
-    @ray.remote
-    class TrialCounter:
-        def __init__(self): self._n = 0
-        def next(self): self._n += 1; return self._n
-
-    RAY_AVAILABLE = True
-except ImportError:
-    RAY_AVAILABLE = False
-
-try:
-    from common_krunic import (
-        set_seed, get_device, get_amp_dtype, build_transforms, create_model,
-        freeze_backbone, unfreeze_all, get_optimizer, build_scheduler,
-        train_one_epoch, _compute_auroc, MixupCutmixCollator,
-        load_search_space_overrides, validate_dataset_path,
-    )
-except ImportError:
-    from krunic.common_krunic import (
-        set_seed, get_device, get_amp_dtype, build_transforms, create_model,
-        freeze_backbone, unfreeze_all, get_optimizer, build_scheduler,
-        train_one_epoch, _compute_auroc, MixupCutmixCollator,
-        load_search_space_overrides, validate_dataset_path,
-    )
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("cvic")
-optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def _compute_metric(probs: np.ndarray, labels: np.ndarray, metric: str) -> float:
+def _ck():
+    """Import shared utilities (cached by sys.modules after first call)."""
+    try:
+        import common_krunic as _m
+    except ImportError:
+        import krunic.common_krunic as _m
+    return _m
+
+
+def _compute_metric(probs, labels, metric: str) -> float:
+    import numpy as np
+    ck = _ck()
     if "auroc" in metric:
-        return _compute_auroc(probs, labels)
+        return ck._compute_auroc(probs, labels)
     if "acc" in metric:
         return float(np.mean(np.argmax(probs, axis=1) == labels))
-    return _compute_auroc(probs, labels)
+    return ck._compute_auroc(probs, labels)
 
 
 def _cvic_trial(config: dict):
     """CV trial: trains one model per fold, reports aggregated metric to Ray Tune."""
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, Subset
+    from torchvision import datasets
+    import ray
+    from ray import tune
     from sklearn.model_selection import StratifiedKFold, KFold
+    ck = _ck()
+    set_seed        = ck.set_seed
+    get_device      = ck.get_device
+    get_amp_dtype   = ck.get_amp_dtype
+    build_transforms = ck.build_transforms
+    create_model    = ck.create_model
+    freeze_backbone = ck.freeze_backbone
+    unfreeze_all    = ck.unfreeze_all
+    get_optimizer   = ck.get_optimizer
+    build_scheduler = ck.build_scheduler
+    train_one_epoch = ck.train_one_epoch
+    MixupCutmixCollator = ck.MixupCutmixCollator
 
     data_path          = Path(config["data"])
     device             = get_device(config["device"])
@@ -215,12 +201,28 @@ def _cvic_trial(config: dict):
 # ---------------------------------------------------------------------------
 
 def run_cv(args):
+    import numpy as np
+    import torch
+    import ray
+    from ray import tune
+    from ray.tune.search.optuna import OptunaSearch
+    from ray.tune import RunConfig
+    from torchvision import datasets
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    @ray.remote
+    class TrialCounter:
+        def __init__(self): self._n = 0
+        def next(self): self._n += 1; return self._n
+
+    ck = _ck()
+    get_amp_dtype           = ck.get_amp_dtype
+    validate_dataset_path   = ck.validate_dataset_path
+    load_search_space_overrides = ck.load_search_space_overrides
+
     if not args.model:
         logger.error("--model is required. E.g. --model resnet18")
-        sys.exit(1)
-
-    if not RAY_AVAILABLE:
-        logger.error("Ray is required. Install with: pip install ray[tune]")
         sys.exit(1)
 
     data_root = args.data

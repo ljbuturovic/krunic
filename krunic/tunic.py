@@ -8,53 +8,17 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-import optuna
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
-
-try:
-    from common_krunic import (
-        set_seed, get_amp_dtype, get_device, validate_dataset_path,
-        build_transforms, make_stratified_split, MixupCutmixCollator,
-        create_model, freeze_backbone, unfreeze_all, get_optimizer,
-        build_scheduler, train_one_epoch, _compute_auroc,
-        load_search_space_overrides, tqdm,
-    )
-except ImportError:
-    from krunic.common_krunic import (
-        set_seed, get_amp_dtype, get_device, validate_dataset_path,
-        build_transforms, make_stratified_split, MixupCutmixCollator,
-        create_model, freeze_backbone, unfreeze_all, get_optimizer,
-        build_scheduler, train_one_epoch, _compute_auroc,
-        load_search_space_overrides, tqdm,
-    )
-
-try:
-    import ray
-    import ray.train
-    import ray.train.torch
-    from ray import tune
-    from ray.tune.search.optuna import OptunaSearch
-    from ray.tune.schedulers import ASHAScheduler
-    from ray.train import ScalingConfig
-    from ray.tune import RunConfig
-    from ray.train.torch import TorchTrainer
-    @ray.remote
-    class TrialCounter:
-        def __init__(self): self._n = 0
-        def next(self): self._n += 1; return self._n
-
-    RAY_AVAILABLE = True
-except ImportError:
-    RAY_AVAILABLE = False
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("tunic")
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+def _ck():
+    """Import shared utilities (cached by sys.modules after first call)."""
+    try:
+        import common_krunic as _m
+    except ImportError:
+        import krunic.common_krunic as _m
+    return _m
 
 
 def _detect_format(data_root: str) -> str:
@@ -139,6 +103,7 @@ def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
             .slice(slice_per_worker)
             .with_length(n_take)
         )
+        from torch.utils.data import DataLoader
         return DataLoader(dataset, batch_size=batch_size, num_workers=workers,
                           pin_memory=False,
                           collate_fn=collate_fn if is_train else None)
@@ -155,6 +120,8 @@ def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
 
 def _subsample(dataset, fraction: float, seed: int):
     """Return a Subset of dataset using a fixed fraction of its indices."""
+    import random
+    from torch.utils.data import Subset
     base = dataset.dataset if isinstance(dataset, Subset) else dataset
     indices = list(dataset.indices if isinstance(dataset, Subset) else range(len(dataset)))
     random.Random(seed).shuffle(indices)
@@ -165,6 +132,11 @@ def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
                    train_tf, val_tf, collate_fn=None,
                    training_fraction: float = 1.0, val_fraction: float = 1.0):
     """Build train/val DataLoaders, creating a stratified split if val/ is absent."""
+    from torch.utils.data import DataLoader, Subset
+    from torchvision import datasets
+    ck = _ck()
+    make_stratified_split = ck.make_stratified_split
+
     train_dir = data_path / "train"
     val_dir = data_path / "val"
 
@@ -199,6 +171,10 @@ def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
 
 
 def evaluate(model, loader, criterion, device, use_amp=False):
+    import torch
+    import numpy as np
+    ck = _ck()
+
     model.eval()
     total_loss = 0.0
     correct = 0
@@ -209,7 +185,7 @@ def evaluate(model, loader, criterion, device, use_amp=False):
     with torch.no_grad():
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
-            with torch.autocast(device_type=device.type, dtype=get_amp_dtype(), enabled=use_amp):
+            with torch.autocast(device_type=device.type, dtype=ck.get_amp_dtype(), enabled=use_amp):
                 outputs = model(images)
                 loss_val = criterion(outputs, labels)
             total_loss += loss_val.item() * images.size(0)
@@ -220,11 +196,15 @@ def evaluate(model, loader, criterion, device, use_amp=False):
 
     probs = torch.cat(all_probs).numpy()
     labels_np = torch.cat(all_labels).numpy()
-    return total_loss / total, correct / total, _compute_auroc(probs, labels_np)
+    return total_loss / total, correct / total, ck._compute_auroc(probs, labels_np)
 
 
 def _evaluate_distributed(model, loader, criterion, device, world_size: int):
     """Like evaluate(), but reduces loss/accuracy across Ray Train workers."""
+    import torch
+    import numpy as np
+    ck = _ck()
+
     model.eval()
     total_loss = 0.0
     correct = 0
@@ -254,7 +234,7 @@ def _evaluate_distributed(model, loader, criterion, device, world_size: int):
 
     probs = torch.cat(all_probs).numpy()
     labels_np = torch.cat(all_labels).numpy()
-    return avg_loss, accuracy, _compute_auroc(probs, labels_np)
+    return avg_loss, accuracy, ck._compute_auroc(probs, labels_np)
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +243,17 @@ def _evaluate_distributed(model, loader, criterion, device, world_size: int):
 
 def train_func_distributed(config: dict):
     """Ray Train worker function. Receives all hyperparams + fixed config as a dict."""
+    import torch.nn as nn
+    import ray
+    import ray.train
+    import ray.train.torch
+    ck = _ck()
+    set_seed = ck.set_seed; build_transforms = ck.build_transforms
+    MixupCutmixCollator = ck.MixupCutmixCollator; create_model = ck.create_model
+    freeze_backbone = ck.freeze_backbone; unfreeze_all = ck.unfreeze_all
+    get_optimizer = ck.get_optimizer; build_scheduler = ck.build_scheduler
+    train_one_epoch = ck.train_one_epoch
+
     data_path = Path(config["data"])
     model_name = config["model"]
     pretrained = config["pretrained"]
@@ -360,6 +351,17 @@ def train_func_distributed(config: dict):
 
 def _tune_trial(config: dict):
     """Plain Ray Tune trainable. Each trial runs on one GPU (or CPU)."""
+    import torch
+    import torch.nn as nn
+    import ray
+    from ray import tune
+    ck = _ck()
+    get_device = ck.get_device; set_seed = ck.set_seed
+    build_transforms = ck.build_transforms; MixupCutmixCollator = ck.MixupCutmixCollator
+    create_model = ck.create_model; freeze_backbone = ck.freeze_backbone
+    unfreeze_all = ck.unfreeze_all; get_optimizer = ck.get_optimizer
+    build_scheduler = ck.build_scheduler; train_one_epoch = ck.train_one_epoch
+
     data_root   = config["data"]
     data_format = config.get("data_format", "imagefolder")
     data_path   = Path(data_root) if data_format == "imagefolder" else None
@@ -436,6 +438,8 @@ def _tune_trial(config: dict):
 
 def _build_combined_loader(data_root, fmt, batch_size, workers, seed, train_tf, collate_fn):
     """Build a DataLoader combining train+val splits. Exits if val is missing."""
+    from torch.utils.data import DataLoader
+    from torchvision import datasets
     if fmt == "webdataset":
         try:
             import webdataset as wds
@@ -514,6 +518,8 @@ def _build_combined_loader(data_root, fmt, batch_size, workers, seed, train_tf, 
 
 def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
     """Build a test DataLoader (WDS or imagefolder). Returns None if no test split exists."""
+    from torch.utils.data import DataLoader
+    from torchvision import datasets
     if fmt == "webdataset":
         try:
             import webdataset as wds
@@ -578,6 +584,27 @@ def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
 
 
 def run_final(args):
+    import torch
+    import torch.nn as nn
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        class tqdm:
+            @staticmethod
+            def write(s): print(s)
+    ck = _ck()
+    validate_dataset_path = ck.validate_dataset_path
+    get_device = ck.get_device
+    set_seed = ck.set_seed
+    get_amp_dtype = ck.get_amp_dtype
+    MixupCutmixCollator = ck.MixupCutmixCollator
+    build_transforms = ck.build_transforms
+    create_model = ck.create_model
+    freeze_backbone = ck.freeze_backbone
+    unfreeze_all = ck.unfreeze_all
+    get_optimizer = ck.get_optimizer
+    build_scheduler = ck.build_scheduler
+    train_one_epoch = ck.train_one_epoch
     t0 = time.time()
     final_json = Path(args.final)
     try:
@@ -727,6 +754,7 @@ def run_final(args):
 # ---------------------------------------------------------------------------
 
 def run_smoke_test(args):
+    import numpy as np
     import tempfile
     from PIL import Image
 
@@ -788,11 +816,28 @@ def run_smoke_test(args):
 # ---------------------------------------------------------------------------
 
 def run_tuning(args):
+    import torch
+    try:
+        import ray
+        from ray import tune
+        from ray.tune.search.optuna import OptunaSearch
+        from ray.tune.schedulers import ASHAScheduler
+        from ray.tune import RunConfig
+        _ray_available = True
+    except ImportError:
+        _ray_available = False
+    from torchvision import datasets
+    ck = _ck()
+    set_seed = ck.set_seed
+    validate_dataset_path = ck.validate_dataset_path
+    get_amp_dtype = ck.get_amp_dtype
+    load_search_space_overrides = ck.load_search_space_overrides
+
     if not args.model:
         logger.error("--model is required for tuning. E.g. --model resnet50")
         sys.exit(1)
 
-    if not RAY_AVAILABLE:
+    if not _ray_available:
         logger.error("Ray is not installed. Install with: pip install 'ray[tune,train]' optuna")
         sys.exit(1)
 
@@ -935,6 +980,11 @@ def run_tuning(args):
             points_to_evaluate=points_to_evaluate,
             evaluated_rewards=evaluated_rewards,
         )
+
+    @ray.remote
+    class TrialCounter:
+        def __init__(self): self._n = 0
+        def next(self): self._n += 1; return self._n
 
     TrialCounter.options(name="trial_counter", lifetime="detached", get_if_exists=True).remote()
 
