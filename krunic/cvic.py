@@ -36,12 +36,20 @@ try:
 except ImportError:
     RAY_AVAILABLE = False
 
-from krunic.tunic import (
-    set_seed, get_device, get_amp_dtype, build_transforms, create_model,
-    freeze_backbone, unfreeze_all, get_optimizer, build_scheduler,
-    train_one_epoch, _compute_auroc, MixupCutmixCollator,
-    load_search_space_overrides, validate_dataset_path,
-)
+try:
+    from common_krunic import (
+        set_seed, get_device, get_amp_dtype, build_transforms, create_model,
+        freeze_backbone, unfreeze_all, get_optimizer, build_scheduler,
+        train_one_epoch, _compute_auroc, MixupCutmixCollator,
+        load_search_space_overrides, validate_dataset_path,
+    )
+except ImportError:
+    from krunic.common_krunic import (
+        set_seed, get_device, get_amp_dtype, build_transforms, create_model,
+        freeze_backbone, unfreeze_all, get_optimizer, build_scheduler,
+        train_one_epoch, _compute_auroc, MixupCutmixCollator,
+        load_search_space_overrides, validate_dataset_path,
+    )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("cvic")
