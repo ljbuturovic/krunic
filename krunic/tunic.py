@@ -279,14 +279,22 @@ def train_func_distributed(config: dict):
 
     rank = ray.train.get_context().get_world_rank()
     world_size = ray.train.get_context().get_world_size()
-    if ray.train.get_context().get_world_rank() == 0:
+    if rank == 0:
         _counter = ray.get_actor("trial_counter")
         _trial_num = ray.get(_counter.next.remote())
     else:
         _trial_num = 0
+    if world_size > 1:
+        import torch.distributed as dist
+        trial_num_tensor = torch.tensor([_trial_num], device="cpu")
+        dist.broadcast(trial_num_tensor, src=0)
+        _trial_num = int(trial_num_tensor.item())
     trial_id = f"{_trial_num}/{config['n_trials']}" if _trial_num else ""
     set_seed(base_seed + rank)
     device = ray.train.torch.get_device()
+
+    shuffle_seed = config.get("shuffle_seed")
+    split_seed = (shuffle_seed + _trial_num) if shuffle_seed is not None else base_seed
 
     use_mixup_cutmix = mixup_alpha > 0 or cutmix_alpha > 0
     collate_fn = MixupCutmixCollator(mixup_alpha, cutmix_alpha, num_classes) if use_mixup_cutmix else None
@@ -294,7 +302,7 @@ def train_func_distributed(config: dict):
     train_tf = build_transforms(img_size, randaug_magnitude, randaug_num_ops, is_train=True)
     val_tf = build_transforms(img_size, is_train=False)
     train_loader, val_loader, _ = _build_loaders(
-        data_path, batch_size, dataloader_workers, base_seed,
+        data_path, batch_size, dataloader_workers, split_seed,
         train_tf, val_tf, collate_fn,
         training_fraction=training_fraction, val_fraction=val_fraction,
     )
@@ -371,6 +379,9 @@ def _tune_trial(config: dict):
     trial_id = f"{_trial_num}/{config['n_trials']}"
     set_seed(config["seed"])
 
+    shuffle_seed = config.get("shuffle_seed")
+    split_seed = (shuffle_seed + _trial_num) if shuffle_seed is not None else config["seed"]
+
     epochs = config["epochs"]
     lr = config["lr"]
     weight_decay = config["weight_decay"]
@@ -388,15 +399,15 @@ def _tune_trial(config: dict):
 
     train_tf = build_transforms(config["img_size"], randaug_magnitude, randaug_num_ops, is_train=True)
     val_tf = build_transforms(config["img_size"], is_train=False)
-    bs, workers, seed = config["batch_size"], config["dataloader_workers"], config["seed"]
+    bs, workers = config["batch_size"], config["dataloader_workers"]
     tf = config["training_fraction"]
     vf = config["val_fraction"]
     if data_format == "webdataset":
         train_loader, val_loader, _ = _build_wds_loaders(
-            data_root, bs, workers, seed, train_tf, val_tf, collate_fn, tf, vf)
+            data_root, bs, workers, split_seed, train_tf, val_tf, collate_fn, tf, vf)
     else:
         train_loader, val_loader, _ = _build_loaders(
-            data_path, bs, workers, seed, train_tf, val_tf, collate_fn, tf, vf)
+            data_path, bs, workers, split_seed, train_tf, val_tf, collate_fn, tf, vf)
 
     try:
         model = create_model(config["model"], num_classes, config["pretrained"], drop_rate)
@@ -897,6 +908,7 @@ def run_tuning(args):
         "device": args.device,
         "use_amp": args.amp,
         "n_trials": args.n_trials,
+        "shuffle_seed": args.shuffle,
         "lr":                    tune.loguniform(ss.get("lr_min", 1e-5),    ss.get("lr_max", 1e-1)),
         "weight_decay":          tune.loguniform(ss.get("wd_min", 1e-6),    ss.get("wd_max", 1e-2)),
         "label_smoothing":       tune.uniform(   ss.get("ls_min", 0.0),     ss.get("ls_max", 0.2)),
@@ -1119,6 +1131,9 @@ def parse_args():
                    help="Ray Tune storage path (local dir or S3 URI, e.g. s3://bucket/ray-results)")
     p.add_argument("--tune-metric", type=str, default="val_auroc", dest="tune_metric",
                    help="Metric used by Optuna and ASHA for trial selection and pruning (default: val_auroc)")
+    p.add_argument("--shuffle", type=int, default=None, metavar = 'shuffle_seed',
+                   help="If set, each trial gets a unique T/V split derived from shuffle_seed + trial_number; "
+                        "omit for a fixed split shared across all trials")
     return p.parse_args()
 
 
