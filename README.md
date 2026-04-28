@@ -1,6 +1,7 @@
 # krunic
 
 [![tests](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml/badge.svg)](https://github.com/ljbuturovic/krunic/actions/workflows/test.yml)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Automated hyperparameter search for image classifiers - from dataset to tuned model with one command. Distributed across GPUs and across hosts, locally and on the cloud (AWS). 
 
@@ -14,7 +15,7 @@ Built on [Ray Tune](https://docs.ray.io/en/latest/tune/index.html), [Optuna](htt
 $ pipx install krunic
 ```
 
-This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The command takes a couple of minutes. 
+This installs three commands: `tunic` (local training), `krunic` (cloud launcher), and `tunic-plotter` (results visualizer). The installation takes a couple of minutes. 
 
 ## Install (Windows)
 
@@ -54,7 +55,7 @@ $ krunic \
   --prefix kaws
 ```
 
-SkyPilot creates the cluster, Ray distributes the load across the GPUs. In my experiments, it achieves near-perfect utilization:
+SkyPilot creates the cluster, Ray distributes the load across the GPUs. In my experiments, it achieves very good GPU utilization:
 
 ![Description](https://raw.githubusercontent.com/ljbuturovic/krunic/main/pcam14_GPU_load.png)
 
