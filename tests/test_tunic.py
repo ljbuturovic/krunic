@@ -198,6 +198,59 @@ def test_cli_prefix(monkeypatch):
     assert args.prefix == "myrun"
 
 
+def test_cli_shuffle(monkeypatch):
+    import sys
+    from krunic.tunic import parse_args
+    monkeypatch.setattr(sys, "argv", [
+        "tunic", "--data", "/tmp", "--model", "resnet18", "--shuffle", "99",
+    ])
+    args = parse_args()
+    assert args.shuffle == 99
+
+
+def test_cli_shuffle_default_is_none(monkeypatch):
+    import sys
+    from krunic.tunic import parse_args
+    monkeypatch.setattr(sys, "argv", [
+        "tunic", "--data", "/tmp", "--model", "resnet18",
+    ])
+    args = parse_args()
+    assert args.shuffle is None
+
+
+# ---------------------------------------------------------------------------
+# --shuffle split behavior
+# ---------------------------------------------------------------------------
+
+def test_shuffle_split_behavior(tmp_path):
+    """Without shuffle all trials share the same split; with shuffle each gets a unique one."""
+    from torchvision import datasets
+    from krunic.common_krunic import make_stratified_split
+    from PIL import Image
+
+    for cls in ["a", "b", "c"]:
+        d = tmp_path / cls
+        d.mkdir()
+        for i in range(20):
+            Image.fromarray(
+                np.random.randint(0, 255, (8, 8, 3), dtype=np.uint8)
+            ).save(d / f"{i}.jpg")
+    ds = datasets.ImageFolder(str(tmp_path))
+
+    base_seed = 42
+    shuffle_seed = 100
+
+    # No shuffle: both trials derive split from the same base_seed
+    _, val_t1 = make_stratified_split(ds, seed=base_seed)
+    _, val_t2 = make_stratified_split(ds, seed=base_seed)
+    assert val_t1.indices == val_t2.indices
+
+    # With shuffle: trial 1 uses shuffle_seed+1, trial 2 uses shuffle_seed+2
+    _, val_s1 = make_stratified_split(ds, seed=shuffle_seed + 1)
+    _, val_s2 = make_stratified_split(ds, seed=shuffle_seed + 2)
+    assert val_s1.indices != val_s2.indices
+
+
 # ---------------------------------------------------------------------------
 # smoke test (CPU, end-to-end)
 # ---------------------------------------------------------------------------
