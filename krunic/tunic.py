@@ -809,6 +809,8 @@ def run_smoke_test(args):
             amp=False,
             final_model="tunic_final.pt",
             final_stats=None,
+            shuffle=None,
+            prefix="smoke",
         )
 
         run_tuning(smoke_args)
@@ -820,6 +822,133 @@ def run_smoke_test(args):
         run_final(smoke_final_args)
 
     logger.info("Smoke test passed.")
+
+
+# Preflight check
+# ---------------------------------------------------------------------------
+
+def _preflight_check_distribution(data_format, data_key, num_classes,
+                                   training_fraction, val_fraction, seed):
+    """Read train and val labels (no image loading) and exit on bad distribution."""
+    import numpy as np
+
+    if data_format == "webdataset":
+        if data_key.startswith("s3://"):
+            return  # skip preflight for remote data
+        try:
+            import webdataset as wds
+        except ImportError:
+            return
+
+        with open(Path(data_key) / "wds" / "dataset_info.json") as f:
+            meta = json.load(f)
+        classes = meta["classes"]
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+
+        def _decode_cls(key, data):
+            return data if key.endswith(".cls") else None
+
+        def _read_labels(split, fraction):
+            n_shards = meta["splits"][split]["num_shards"]
+            n_total  = meta["splits"][split]["num_samples"]
+            urls = [str(Path(data_key) / "wds" / split / f"shard-{i:06d}.tar")
+                    for i in range(n_shards)]
+            n_take = max(1, int(n_total * fraction))
+            ds = (wds.WebDataset(urls, shardshuffle=False, empty_check=False)
+                  .decode(_decode_cls)
+                  .to_tuple("cls")
+                  .map(lambda t: class_to_idx[t[0].decode().strip()]))
+            all_labels = np.fromiter(ds, dtype=np.int64)
+            return all_labels[:n_take], all_labels, n_total
+
+        train_labels, train_all, n_train_total = _read_labels("train", training_fraction)
+        val_labels,   val_all,   n_val_total   = _read_labels("val",   val_fraction)
+        class_names  = classes
+
+    else:  # imagefolder
+        from torchvision import datasets as tvd
+        ck = _ck()
+        data_path = Path(data_key)
+
+        train_full = np.array(tvd.ImageFolder(str(data_path / "train")).targets, dtype=np.int64)
+        n_train_total = len(train_full)
+        if training_fraction < 1.0:
+            import random
+            idx = list(range(len(train_full)))
+            random.Random(seed).shuffle(idx)
+            train_labels = train_full[idx[:max(1, int(len(idx) * training_fraction))]]
+        else:
+            train_labels = train_full
+        train_all = train_full
+
+        val_dir = data_path / "val"
+        if val_dir.exists():
+            val_full = np.array(tvd.ImageFolder(str(val_dir)).targets, dtype=np.int64)
+        else:
+            base_ds = tvd.ImageFolder(str(data_path / "train"))
+            _, val_sub = ck.make_stratified_split(base_ds, val_fraction=0.2, seed=seed)
+            val_full = np.array([base_ds.targets[i] for i in val_sub.indices], dtype=np.int64)
+        n_val_total = len(val_full)
+        if val_fraction < 1.0:
+            import random
+            idx = list(range(len(val_full)))
+            random.Random(seed).shuffle(idx)
+            val_labels = val_full[idx[:max(1, int(len(idx) * val_fraction))]]
+        else:
+            val_labels = val_full
+        val_all = val_full
+        class_names = None
+
+    name_w = max((len(n) for n in class_names), default=7) if class_names else len(f"class {num_classes - 1:3d}")
+    sel_w  = max(len(str(max((train_labels == c).sum() for c in range(num_classes)))),
+                 len(str(max((val_labels   == c).sum() for c in range(num_classes)))))
+    tot_w  = max(len(str(max((train_all   == c).sum() for c in range(num_classes)))),
+                 len(str(max((val_all     == c).sum() for c in range(num_classes)))))
+
+    train_bad = _report_split("Training",   train_labels, train_all, n_train_total, training_fraction,
+                              num_classes, class_names, name_w, sel_w, tot_w, check_auroc=False)
+    print()
+    val_bad   = _report_split("Validation", val_labels,   val_all,   n_val_total,   val_fraction,
+                              num_classes, class_names, name_w, sel_w, tot_w, check_auroc=True)
+
+    errors = []
+    if train_bad:
+        errors.append(f"{len(train_bad)} training class(es) have no images - increase --training-fraction.")
+    if val_bad:
+        errors.append(f"{len(val_bad)} validation class(es) have no images - increase --val-fraction.")
+    if errors:
+        print()
+        for msg in errors:
+            print(msg)
+        sys.exit(1)
+
+
+def _report_split(split_name, labels, all_labels, n_total, fraction,
+                  num_classes, class_names, name_w, sel_w, tot_w, check_auroc):
+    """Print aligned per-class counts for one split. Return list of bad class indices."""
+    import numpy as np
+    n = len(labels)
+    if fraction < 1.0:
+        header = f"{split_name} set: {n} images selected out of {n_total}, {num_classes} classes:"
+    else:
+        header = f"{split_name} set: {n_total} images, {num_classes} classes:"
+    bad = []
+    print(header)
+    for c in range(num_classes):
+        count     = int((labels     == c).sum())
+        count_all = int((all_labels == c).sum())
+        label = class_names[c] if class_names else f"class {c:3d}"
+        flagged = (count == 0 or count == n) if check_auroc else (count == 0)
+        note = "  <- no positives - AUROC undefined" if (check_auroc and flagged) else \
+               "  <- no images" if flagged else ""
+        if flagged:
+            bad.append(c)
+        if fraction < 1.0:
+            count_str = f"sampled {count:>{sel_w}} out of {count_all:>{tot_w}} images"
+        else:
+            count_str = f"{count_all:>{tot_w}} images"
+        print(f"  {label:<{name_w}}  {count_str}{note}")
+    return bad
 
 
 # ---------------------------------------------------------------------------
@@ -852,11 +981,7 @@ def run_tuning(args):
         logger.error("Ray is not installed. Install with: pip install 'ray[tune,train]' optuna")
         sys.exit(1)
 
-    if not ray.is_initialized():
-        address = args.ray_address or None
-        ray.init(address=address, ignore_reinit_error=True)
-        logger.info(f"Ray initialized (address={address or 'local'})")
-
+    # Dataset detection and preflight checks must run before Ray starts.
     data_root   = args.data
     data_format = _detect_format(data_root)
     set_seed(args.seed)
@@ -876,6 +1001,14 @@ def run_tuning(args):
         data_key = str(data_path.resolve())
 
     logger.info(f"Dataset: {data_root} | Format: {data_format} | Classes: {num_classes} | Model: {args.model}")
+    _preflight_check_distribution(data_format, data_key, num_classes,
+                                  args.training_fraction, args.val_fraction, args.seed)
+
+    if not ray.is_initialized():
+        address = args.ray_address or None
+        ray.init(address=address, ignore_reinit_error=True)
+        logger.info(f"Ray initialized (address={address or 'local'})")
+
     if args.amp:
         _amp_dtype = get_amp_dtype()
         _amp_label = "BF16" if _amp_dtype == torch.bfloat16 else "FP16"

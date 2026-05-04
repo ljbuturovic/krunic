@@ -84,7 +84,6 @@ def test_compute_auroc_multiclass():
 
 def test_compute_auroc_single_class_returns_nan():
     from krunic.common_krunic import _compute_auroc
-    # Only one class present — undefined AUROC
     probs = np.array([[1.0, 0.0], [0.9, 0.1], [0.8, 0.2]])
     labels = np.array([0, 0, 0])
     assert np.isnan(_compute_auroc(probs, labels))

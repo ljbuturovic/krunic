@@ -273,6 +273,33 @@ def train_one_epoch(model, loader, optimizer, scheduler, criterion, device,
     return total_loss / total, correct / total
 
 
+def check_class_distribution(labels: np.ndarray, n_classes: int, class_names: list[str] | None = None) -> list[int]:
+    """Print per-class sample counts to stderr. Return list of unscorable class indices.
+
+    Does NOT call sys.exit() — the caller decides whether to abort.
+    """
+    n = len(labels)
+    bad = []
+    lines = [f"\nValidation set: {n} samples across {n_classes} classes:"]
+    for c in range(n_classes):
+        count = int((labels == c).sum())
+        if count == 0:
+            note = "  <- no positives — AUROC undefined"
+            bad.append(c)
+        elif count == n:
+            note = "  <- no negatives — AUROC undefined"
+            bad.append(c)
+        else:
+            note = ""
+        label = f"{class_names[c]}" if class_names else f"class {c:3d}"
+        lines.append(f"  {label:30s}: {count:5d} samples{note}" if class_names else f"  {label}: {count:5d} samples{note}")
+    if bad:
+        lines.append(f"\n{len(bad)} class(es) cannot be scored.")
+        lines.append("Increase --val-fraction so every class has both positive and negative examples.")
+        print("\n".join(lines), file=sys.stderr)
+    return bad
+
+
 def _compute_auroc(probs: np.ndarray, labels: np.ndarray) -> float:
     from sklearn.metrics import roc_auc_score
     present = np.unique(labels)
