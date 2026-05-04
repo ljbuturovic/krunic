@@ -162,11 +162,12 @@ def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
         logger.info(f"Using {len(val_dataset)}/{n_before} val samples (val_fraction={val_fraction})")
 
     num_classes = len(train_dataset.dataset.classes if isinstance(train_dataset, Subset) else train_dataset.classes)
+    pw = workers > 0
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                               num_workers=workers, pin_memory=True, drop_last=True,
-                              collate_fn=collate_fn)
+                              persistent_workers=pw, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                            num_workers=workers, pin_memory=True)
+                            num_workers=workers, pin_memory=True, persistent_workers=pw)
     return train_loader, val_loader, num_classes
 
 
