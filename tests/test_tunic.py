@@ -218,6 +218,96 @@ def test_cli_shuffle_default_is_none(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# _build_loaders — no-val-dir behavior
+# ---------------------------------------------------------------------------
+
+def _make_train_only_dir(tmp_path, classes=("a", "b", "c"), n_per_class=20):
+    from PIL import Image
+    for cls in classes:
+        d = tmp_path / "train" / cls
+        d.mkdir(parents=True)
+        for i in range(n_per_class):
+            Image.fromarray(
+                np.random.randint(0, 255, (8, 8, 3), dtype=np.uint8)
+            ).save(d / f"{i}.jpg")
+
+
+def test_build_loaders_no_val_dir_requires_val_fraction(tmp_path):
+    from torchvision.transforms import ToTensor
+    from krunic.tunic import _build_loaders
+    _make_train_only_dir(tmp_path)
+    with pytest.raises(SystemExit):
+        _build_loaders(tmp_path, batch_size=4, workers=0, seed=42,
+                       train_tf=ToTensor(), val_tf=ToTensor(),
+                       training_fraction=0.5, val_fraction=None)
+
+
+def test_build_loaders_no_val_dir_sum_exceeds_one(tmp_path):
+    from torchvision.transforms import ToTensor
+    from krunic.tunic import _build_loaders
+    _make_train_only_dir(tmp_path)
+    with pytest.raises(SystemExit):
+        _build_loaders(tmp_path, batch_size=4, workers=0, seed=42,
+                       train_tf=ToTensor(), val_tf=ToTensor(),
+                       training_fraction=0.7, val_fraction=0.4)
+
+
+def test_build_loaders_no_val_dir_disjoint(tmp_path):
+    from torchvision.transforms import ToTensor
+    from krunic.tunic import _build_loaders
+    _make_train_only_dir(tmp_path)
+    train_loader, val_loader, _ = _build_loaders(
+        tmp_path, batch_size=4, workers=0, seed=42,
+        train_tf=ToTensor(), val_tf=ToTensor(),
+        training_fraction=0.5, val_fraction=0.3,
+    )
+    train_indices = set(train_loader.dataset.indices)
+    val_indices = set(val_loader.dataset.indices)
+    assert train_indices.isdisjoint(val_indices)
+
+
+def test_build_loaders_no_val_dir_sizes(tmp_path):
+    from torchvision.transforms import ToTensor
+    from krunic.tunic import _build_loaders
+    _make_train_only_dir(tmp_path, n_per_class=20)  # 60 total
+    train_loader, val_loader, _ = _build_loaders(
+        tmp_path, batch_size=4, workers=0, seed=42,
+        train_tf=ToTensor(), val_tf=ToTensor(),
+        training_fraction=0.5, val_fraction=0.3,
+    )
+    # 20*0.5=10 train, 20*0.3=6 val per class → 30 train, 18 val
+    assert len(train_loader.dataset) == pytest.approx(30, abs=3)
+    assert len(val_loader.dataset) == pytest.approx(18, abs=3)
+
+
+# ---------------------------------------------------------------------------
+# _preflight_check_distribution — no-val-dir imagefolder
+# ---------------------------------------------------------------------------
+
+def test_preflight_no_val_dir_requires_val_fraction(tmp_path):
+    from krunic.tunic import _preflight_check_distribution
+    _make_train_only_dir(tmp_path)
+    with pytest.raises(SystemExit):
+        _preflight_check_distribution("imagefolder", str(tmp_path), 3, 0.5, None, 42)
+
+
+def test_preflight_no_val_dir_sum_exceeds_one(tmp_path):
+    from krunic.tunic import _preflight_check_distribution
+    _make_train_only_dir(tmp_path)
+    with pytest.raises(SystemExit):
+        _preflight_check_distribution("imagefolder", str(tmp_path), 3, 0.7, 0.4, 42)
+
+
+def test_preflight_no_val_dir_happy_path(tmp_path, capsys):
+    from krunic.tunic import _preflight_check_distribution
+    _make_train_only_dir(tmp_path)
+    _preflight_check_distribution("imagefolder", str(tmp_path), 3, 0.5, 0.3, 42)
+    out = capsys.readouterr().out
+    assert "Training set" in out
+    assert "Validation set" in out
+
+
+# ---------------------------------------------------------------------------
 # --shuffle split behavior
 # ---------------------------------------------------------------------------
 
