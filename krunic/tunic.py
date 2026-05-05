@@ -33,7 +33,7 @@ def _detect_format(data_root: str) -> str:
 
 def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
                         train_tf, val_tf, collate_fn=None,
-                        training_fraction: float = 1.0, val_fraction: float = 1.0):
+                        training_fraction: float = 1.0, val_fraction: float | None = None):
     """Build train/val DataLoaders from WebDataset TAR shards (local or s3://)."""
     try:
         import webdataset as wds
@@ -65,11 +65,18 @@ def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
         return [str(d / f"shard-{i:06d}.tar") for i in range(n)]
 
     def decode_cls(b):
-        return class_to_idx[b.decode().strip()]
+        s = b.decode().strip()
+        try:
+            idx = int(s)
+            if 0 <= idx < num_classes:
+                return idx
+        except ValueError:
+            pass
+        return class_to_idx[s]
 
     # webdataset >= 1.0 includes basichandlers in imagehandler, which maps
-    # ".cls" -> int(data). Our .cls files store class name strings, so we
-    # must intercept them before the built-in handler converts them to int.
+    # ".cls" -> int(data). We intercept .cls to keep raw bytes; decode_cls
+    # handles both integer and string class labels.
     _img_decoder = wds.autodecode.imagehandler("pil")
 
     def _decoder(key, data):
@@ -110,10 +117,25 @@ def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
 
     train_loader = make_loader("train", train_tf, is_train=True,  fraction=training_fraction)
     if "val" in meta.get("splits", {}):
-        val_loader = make_loader("val",   val_tf,   is_train=False, fraction=val_fraction)
+        vf = val_fraction if val_fraction is not None else 1.0
+        val_loader = make_loader("val",   val_tf,   is_train=False, fraction=vf)
     else:
-        logger.warning("No 'val' split in WebDataset — using 20%% of train as val")
-        val_loader = make_loader("train", val_tf,   is_train=False, fraction=0.2)
+        if val_fraction is None:
+            logger.error(
+                "No val split in WebDataset and --val-fraction is not set. "
+                "Specify --val-fraction to reserve a fraction of training data for validation "
+                "(e.g. --val-fraction 0.2). "
+                "--training-fraction + --val-fraction must be ≤ 1.0."
+            )
+            sys.exit(1)
+        if training_fraction + val_fraction > 1.0:
+            logger.error(
+                f"--training-fraction ({training_fraction:.3f}) + --val-fraction ({val_fraction:.3f}) "
+                f"= {training_fraction + val_fraction:.3f} > 1.0. "
+                "When no val split exists, both fractions are drawn from the training set and must sum to ≤ 1.0."
+            )
+            sys.exit(1)
+        val_loader = make_loader("train", val_tf, is_train=False, fraction=val_fraction)
 
     return train_loader, val_loader, num_classes
 
@@ -130,36 +152,73 @@ def _subsample(dataset, fraction: float, seed: int):
 
 def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
                    train_tf, val_tf, collate_fn=None,
-                   training_fraction: float = 1.0, val_fraction: float = 1.0):
-    """Build train/val DataLoaders, creating a stratified split if val/ is absent."""
+                   training_fraction: float = 1.0, val_fraction: float | None = None):
+    """Build train/val DataLoaders, creating a disjoint stratified split if val/ is absent."""
     from torch.utils.data import DataLoader, Subset
     from torchvision import datasets
-    ck = _ck()
-    make_stratified_split = ck.make_stratified_split
 
     train_dir = data_path / "train"
     val_dir = data_path / "val"
 
     if val_dir.exists():
+        eff_val_frac = val_fraction if val_fraction is not None else 1.0
         train_dataset = datasets.ImageFolder(str(train_dir), transform=train_tf)
         val_dataset = datasets.ImageFolder(str(val_dir), transform=val_tf)
+
+        if training_fraction < 1.0:
+            n_before = len(train_dataset)
+            train_dataset = _subsample(train_dataset, training_fraction, seed)
+            logger.info(f"Using {len(train_dataset)}/{n_before} training samples (training_fraction={training_fraction})")
+
+        if eff_val_frac < 1.0:
+            n_before = len(val_dataset)
+            val_dataset = _subsample(val_dataset, eff_val_frac, seed)
+            logger.info(f"Using {len(val_dataset)}/{n_before} val samples (val_fraction={eff_val_frac})")
+
     else:
-        logger.warning("No val/ directory found — creating a stratified 80/20 split from train/")
-        base_dataset = datasets.ImageFolder(str(train_dir), transform=train_tf)
-        train_subset, val_subset = make_stratified_split(base_dataset, val_fraction=0.2, seed=seed)
-        train_dataset = train_subset
+        if val_fraction is None:
+            logger.error(
+                "No val/ directory found and --val-fraction is not set. "
+                "Specify --val-fraction to reserve a fraction of training images for validation "
+                "(e.g. --val-fraction 0.2). "
+                "--training-fraction + --val-fraction must be ≤ 1.0."
+            )
+            sys.exit(1)
+        if training_fraction + val_fraction > 1.0:
+            logger.error(
+                f"--training-fraction ({training_fraction:.3f}) + --val-fraction ({val_fraction:.3f}) "
+                f"= {training_fraction + val_fraction:.3f} > 1.0. "
+                "When no val/ directory exists, both fractions are drawn from the same training pool "
+                "and must sum to ≤ 1.0."
+            )
+            sys.exit(1)
+        eff_val_frac = val_fraction
+
+        from collections import defaultdict
+        import random as _random
+        logger.warning("No val/ directory — splitting train/ using training_fraction and val_fraction (disjoint)")
+        base_dataset = datasets.ImageFolder(str(train_dir))
+
+        class_to_idxs = defaultdict(list)
+        for i, (_, lbl) in enumerate(base_dataset.samples):
+            class_to_idxs[lbl].append(i)
+
+        train_indices, val_indices = [], []
+        rng = _random.Random(seed)
+        for lbl in sorted(class_to_idxs):
+            idxs = list(class_to_idxs[lbl])
+            rng.shuffle(idxs)
+            n_tr = max(1, round(len(idxs) * training_fraction))
+            n_va = max(1, round(len(idxs) * eff_val_frac))
+            train_indices.extend(idxs[:n_tr])
+            val_indices.extend(idxs[n_tr:n_tr + n_va])
+
+        train_base = datasets.ImageFolder(str(train_dir), transform=train_tf)
         val_base = datasets.ImageFolder(str(train_dir), transform=val_tf)
-        val_dataset = Subset(val_base, val_subset.indices)
-
-    if training_fraction < 1.0:
-        n_before = len(train_dataset.indices if isinstance(train_dataset, Subset) else range(len(train_dataset)))
-        train_dataset = _subsample(train_dataset, training_fraction, seed)
-        logger.info(f"Using {len(train_dataset)}/{n_before} training samples (training_fraction={training_fraction})")
-
-    if val_fraction < 1.0:
-        n_before = len(val_dataset.indices if isinstance(val_dataset, Subset) else range(len(val_dataset)))
-        val_dataset = _subsample(val_dataset, val_fraction, seed)
-        logger.info(f"Using {len(val_dataset)}/{n_before} val samples (val_fraction={val_fraction})")
+        train_dataset = Subset(train_base, train_indices)
+        val_dataset = Subset(val_base, val_indices)
+        logger.info(f"Using {len(train_dataset)} training, {len(val_dataset)} val samples "
+                    f"(disjoint from {len(base_dataset.samples)} total)")
 
     num_classes = len(train_dataset.dataset.classes if isinstance(train_dataset, Subset) else train_dataset.classes)
     pw = workers > 0
@@ -494,7 +553,14 @@ def _build_combined_loader(data_root, fmt, batch_size, workers, seed, train_tf, 
                 return data
             return _img_decoder(key, data)
         def decode_cls(b):
-            return class_to_idx[b.decode().strip()]
+            s = b.decode().strip()
+            try:
+                idx = int(s)
+                if 0 <= idx < num_classes:
+                    return idx
+            except ValueError:
+                pass
+            return class_to_idx[s]
         def apply_tf(img):
             return train_tf(img.convert("RGB"))
 
@@ -566,7 +632,14 @@ def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
                 return data
             return _img_decoder(key, data)
         def decode_cls(b):
-            return class_to_idx[b.decode().strip()]
+            s = b.decode().strip()
+            try:
+                idx = int(s)
+                if 0 <= idx < len(classes):
+                    return idx
+            except ValueError:
+                pass
+            return class_to_idx[s]
         def apply_tf(img):
             return val_tf(img.convert("RGB"))
         effective_workers = min(workers, len(urls)) if workers > 0 else 1
@@ -849,6 +922,17 @@ def _preflight_check_distribution(data_format, data_key, num_classes,
         def _decode_cls(key, data):
             return data if key.endswith(".cls") else None
 
+        def _resolve_label(raw: bytes, c2i: dict) -> int:
+            """Handle both integer labels (b'0') and string labels (b'atelectasis')."""
+            s = raw.decode().strip()
+            try:
+                idx = int(s)
+                if 0 <= idx < len(c2i):
+                    return idx
+            except ValueError:
+                pass
+            return c2i[s]
+
         def _read_labels(split, fraction):
             n_shards = meta["splits"][split]["num_shards"]
             n_total  = meta["splits"][split]["num_samples"]
@@ -858,46 +942,116 @@ def _preflight_check_distribution(data_format, data_key, num_classes,
             ds = (wds.WebDataset(urls, shardshuffle=False, empty_check=False)
                   .decode(_decode_cls)
                   .to_tuple("cls")
-                  .map(lambda t: class_to_idx[t[0].decode().strip()]))
+                  .map(lambda t: _resolve_label(t[0], class_to_idx)))
             all_labels = np.fromiter(ds, dtype=np.int64)
             return all_labels[:n_take], all_labels, n_total
 
         train_labels, train_all, n_train_total = _read_labels("train", training_fraction)
-        val_labels,   val_all,   n_val_total   = _read_labels("val",   val_fraction)
         class_names  = classes
+
+        if "val" in meta["splits"]:
+            vf = val_fraction if val_fraction is not None else 1.0
+            val_labels, val_all, n_val_total = _read_labels("val", vf)
+        else:
+            # No val split: both fractions from training data, disjoint
+            import random
+            if val_fraction is None:
+                print("\nError: No validation split found and --val-fraction is not set.", file=sys.stderr)
+                print("Specify --val-fraction to reserve a fraction of training data for validation "
+                      "(e.g. --val-fraction 0.2).", file=sys.stderr)
+                print("--training-fraction + --val-fraction must be ≤ 1.0.", file=sys.stderr)
+                sys.exit(1)
+            n_total = len(train_all)
+            if training_fraction + val_fraction > 1.0:
+                print(f"\nError: --training-fraction ({training_fraction:.3f}) + "
+                      f"--val-fraction ({val_fraction:.3f}) = {training_fraction + val_fraction:.3f} > 1.0",
+                      file=sys.stderr)
+                print("When there is no validation split, both fractions are drawn from the same training data "
+                      "and must sum to ≤ 1.0.", file=sys.stderr)
+                print("Reduce --training-fraction, --val-fraction, or both.", file=sys.stderr)
+                sys.exit(1)
+
+            all_idx = list(range(n_total))
+            random.Random(seed).shuffle(all_idx)
+            train_n = max(1, round(n_total * training_fraction))
+            val_n   = max(1, round(n_total * val_fraction))
+
+            train_labels = train_all[all_idx[:train_n]]
+            val_labels   = train_all[all_idx[train_n:train_n + val_n]]
+            val_all      = train_all
+            n_train_total = n_total
+            n_val_total   = n_total
 
     else:  # imagefolder
         from torchvision import datasets as tvd
-        ck = _ck()
+        import random
         data_path = Path(data_key)
-
-        train_full = np.array(tvd.ImageFolder(str(data_path / "train")).targets, dtype=np.int64)
-        n_train_total = len(train_full)
-        if training_fraction < 1.0:
-            import random
-            idx = list(range(len(train_full)))
-            random.Random(seed).shuffle(idx)
-            train_labels = train_full[idx[:max(1, int(len(idx) * training_fraction))]]
-        else:
-            train_labels = train_full
-        train_all = train_full
 
         val_dir = data_path / "val"
         if val_dir.exists():
+            eff_val_frac = val_fraction if val_fraction is not None else 1.0
+
+            train_full = np.array(tvd.ImageFolder(str(data_path / "train")).targets, dtype=np.int64)
+            n_train_total = len(train_full)
+            if training_fraction < 1.0:
+                idx = list(range(len(train_full)))
+                random.Random(seed).shuffle(idx)
+                train_labels = train_full[idx[:max(1, round(len(idx) * training_fraction))]]
+            else:
+                train_labels = train_full
+            train_all = train_full
+
             val_full = np.array(tvd.ImageFolder(str(val_dir)).targets, dtype=np.int64)
+            n_val_total = len(val_full)
+            if eff_val_frac < 1.0:
+                idx = list(range(len(val_full)))
+                random.Random(seed).shuffle(idx)
+                val_labels = val_full[idx[:max(1, round(len(idx) * eff_val_frac))]]
+            else:
+                val_labels = val_full
+            val_all = val_full
         else:
+            # No val dir: both fractions from same training pool, disjoint stratified split
+            if val_fraction is None:
+                print("\nError: No val/ directory found and --val-fraction is not set.", file=sys.stderr)
+                print("Specify --val-fraction to reserve a fraction of training images for validation "
+                      "(e.g. --val-fraction 0.2).", file=sys.stderr)
+                print("--training-fraction + --val-fraction must be ≤ 1.0.", file=sys.stderr)
+                sys.exit(1)
+            if training_fraction + val_fraction > 1.0:
+                print(f"\nError: --training-fraction ({training_fraction:.3f}) + "
+                      f"--val-fraction ({val_fraction:.3f}) = {training_fraction + val_fraction:.3f} > 1.0",
+                      file=sys.stderr)
+                print("When there is no val/ directory, both fractions are drawn from the same training set "
+                      "and must sum to ≤ 1.0.", file=sys.stderr)
+                print("Reduce --training-fraction, --val-fraction, or both.", file=sys.stderr)
+                sys.exit(1)
+
+            from collections import defaultdict
             base_ds = tvd.ImageFolder(str(data_path / "train"))
-            _, val_sub = ck.make_stratified_split(base_ds, val_fraction=0.2, seed=seed)
-            val_full = np.array([base_ds.targets[i] for i in val_sub.indices], dtype=np.int64)
-        n_val_total = len(val_full)
-        if val_fraction < 1.0:
-            import random
-            idx = list(range(len(val_full)))
-            random.Random(seed).shuffle(idx)
-            val_labels = val_full[idx[:max(1, int(len(idx) * val_fraction))]]
-        else:
-            val_labels = val_full
-        val_all = val_full
+            class_to_idxs = defaultdict(list)
+            for i, (_, lbl) in enumerate(base_ds.samples):
+                class_to_idxs[lbl].append(i)
+
+            train_sel, val_sel = [], []
+            rng = random.Random(seed)
+            for lbl in sorted(class_to_idxs):
+                idxs = list(class_to_idxs[lbl])
+                rng.shuffle(idxs)
+                n_tr = max(1, round(len(idxs) * training_fraction))
+                n_va = max(1, round(len(idxs) * val_fraction))
+                train_sel.extend(idxs[:n_tr])
+                val_sel.extend(idxs[n_tr:n_tr + n_va])
+
+            targets = np.array(base_ds.targets, dtype=np.int64)
+            n_train_total = len(targets)
+            train_all = targets
+            train_labels = targets[train_sel]
+
+            n_val_total = len(targets)
+            val_all = targets
+            val_labels = targets[val_sel]
+
         class_names = None
 
     name_w = max((len(n) for n in class_names), default=7) if class_names else len(f"class {num_classes - 1:3d}")
@@ -1238,7 +1392,10 @@ def parse_args():
     p.add_argument("--training-fraction", type=float, default=1.0, dest="training_fraction",
                    help="Fraction of training data to use (e.g. 0.1 for 10%%); same subset across all trials")
     p.add_argument("--val-fraction", type=float, default=None, dest="val_fraction",
-                   help="Fraction of val data to use (defaults to --training-fraction)")
+                   help="Fraction of data for validation. With a val/ dir: fraction of val split to use. "
+                        "Without val/ dir: REQUIRED — fraction of total training images reserved for "
+                        "validation (disjoint from training set); "
+                        "--training-fraction + --val-fraction must be ≤ 1.0.")
     p.add_argument("--freeze-backbone", type=int, default=0, dest="freeze_backbone",
                    help="Epochs to freeze backbone; 0 = no freeze")
     p.add_argument("--final", type=str, default=None,
@@ -1273,9 +1430,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    if args.val_fraction is None:
-        args.val_fraction = 1.0
 
     if args.smoke_test:
         run_smoke_test(args)
