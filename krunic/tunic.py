@@ -33,7 +33,8 @@ def _detect_format(data_root: str) -> str:
 
 def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
                         train_tf, val_tf, collate_fn=None,
-                        training_fraction: float = 1.0, val_fraction: float | None = None):
+                        training_fraction: float = 1.0, val_fraction: float | None = None,
+                        require_val: bool = True):
     """Build train/val DataLoaders from WebDataset TAR shards (local or s3://)."""
     try:
         import webdataset as wds
@@ -121,6 +122,8 @@ def _build_wds_loaders(data_root: str, batch_size: int, workers: int, seed: int,
         val_loader = make_loader("val",   val_tf,   is_train=False, fraction=vf)
     else:
         if val_fraction is None:
+            if not require_val:
+                return train_loader, None, classes
             logger.error(
                 "No val split in WebDataset and --val-fraction is not set. "
                 "Specify --val-fraction to reserve a fraction of training data for validation "
@@ -152,7 +155,8 @@ def _subsample(dataset, fraction: float, seed: int):
 
 def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
                    train_tf, val_tf, collate_fn=None,
-                   training_fraction: float = 1.0, val_fraction: float | None = None):
+                   training_fraction: float = 1.0, val_fraction: float | None = None,
+                   require_val: bool = True):
     """Build train/val DataLoaders, creating a disjoint stratified split if val/ is absent."""
     from torch.utils.data import DataLoader, Subset
     from torchvision import datasets
@@ -177,6 +181,14 @@ def _build_loaders(data_path: Path, batch_size: int, workers: int, seed: int,
 
     else:
         if val_fraction is None:
+            if not require_val:
+                train_base = datasets.ImageFolder(str(train_dir), transform=train_tf)
+                if training_fraction < 1.0:
+                    train_base = _subsample(train_base, training_fraction, seed)
+                loader = DataLoader(train_base, batch_size=batch_size, shuffle=True,
+                                    num_workers=workers, pin_memory=True,
+                                    collate_fn=collate_fn)
+                return loader, None, train_base.dataset.classes if hasattr(train_base, 'dataset') else train_base.classes
             logger.error(
                 "No val/ directory found and --val-fraction is not set. "
                 "Specify --val-fraction to reserve a fraction of training images for validation "
@@ -594,25 +606,30 @@ def _build_combined_loader(data_root, fmt, batch_size, workers, seed, train_tf, 
                           collate_fn=collate_fn), num_classes
 
 
-def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
-    """Build a test DataLoader (WDS or imagefolder). Returns None if no test split exists."""
+def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf, test_root=None):
+    """Build a test DataLoader (WDS or imagefolder). Returns None if no test split exists.
+
+    test_root: if given, look for the test split here instead of data_root (for datasets
+               where subsamples and the shared test set live in separate directories).
+    """
     from torch.utils.data import DataLoader
     from torchvision import datasets
+    test_root = test_root or data_root
     if fmt == "webdataset":
         try:
             import webdataset as wds
         except ImportError:
             logger.error("webdataset not installed")
             return None
-        is_s3 = data_root.startswith("s3://")
+        is_s3 = test_root.startswith("s3://")
         if is_s3:
             import subprocess
-            info_url = data_root.rstrip("/") + "/wds/dataset_info.json"
+            info_url = test_root.rstrip("/") + "/wds/dataset_info.json"
             r = subprocess.run(["aws", "s3", "cp", info_url, "-"],
                                capture_output=True, text=True, check=True)
             meta = json.loads(r.stdout)
         else:
-            with open(Path(data_root) / "wds" / "dataset_info.json") as f:
+            with open(Path(test_root) / "wds" / "dataset_info.json") as f:
                 meta = json.load(f)
         if "test" not in meta.get("splits", {}):
             return None
@@ -621,10 +638,10 @@ def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
         n_shards = meta["splits"]["test"]["num_shards"]
         n_samples = meta["splits"]["test"]["num_samples"]
         if is_s3:
-            base = data_root.rstrip("/")
+            base = test_root.rstrip("/")
             urls = [f"pipe:aws s3 cp {base}/wds/test/shard-{i:06d}.tar -" for i in range(n_shards)]
         else:
-            d = Path(data_root) / "wds" / "test"
+            d = Path(test_root) / "wds" / "test"
             urls = [str(d / f"shard-{i:06d}.tar") for i in range(n_shards)]
         _img_decoder = wds.autodecode.imagehandler("pil")
         def _decoder(key, data):
@@ -660,7 +677,7 @@ def _build_test_loader(data_root, fmt, batch_size, workers, seed, val_tf):
         )
         return DataLoader(dataset, batch_size=batch_size, num_workers=workers, pin_memory=False)
     else:
-        test_dir = Path(data_root) / "test"
+        test_dir = Path(test_root) / "test"
         if not test_dir.exists():
             return None
         test_dataset = datasets.ImageFolder(str(test_dir), transform=val_tf)
@@ -739,12 +756,14 @@ def run_final(args):
         train_loader, val_loader, inferred_classes = _build_wds_loaders(
             data_root, args.batch_size, args.workers, args.seed,
             train_tf, val_tf, collate_fn,
-            training_fraction=args.training_fraction, val_fraction=args.val_fraction)
+            training_fraction=args.training_fraction, val_fraction=args.val_fraction,
+            require_val=False)
     else:
         train_loader, val_loader, inferred_classes = _build_loaders(
             data_path, args.batch_size, args.workers, args.seed,
             train_tf, val_tf, collate_fn,
-            training_fraction=args.training_fraction, val_fraction=args.val_fraction)
+            training_fraction=args.training_fraction, val_fraction=args.val_fraction,
+            require_val=False)
     if num_classes is None:
         num_classes = inferred_classes
 
@@ -815,7 +834,8 @@ def run_final(args):
         summary_lines.append(f"  Trained on train+val combined for {best_epoch} epochs (no val tracking)")
     summary_lines.append(f"  Checkpoint saved to: {checkpoint_path}")
 
-    test_loader = _build_test_loader(data_root, fmt, args.batch_size, args.workers, args.seed, val_tf)
+    test_loader = _build_test_loader(data_root, fmt, args.batch_size, args.workers, args.seed, val_tf,
+                                     test_root=args.test_data)
     if test_loader is not None:
         model.load_state_dict(best_state)
         model.to(device)
@@ -885,6 +905,7 @@ def run_smoke_test(args):
             final_stats=None,
             shuffle=None,
             prefix="smoke",
+            test_data=None,
         )
 
         run_tuning(smoke_args)
@@ -1369,6 +1390,10 @@ def parse_args():
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {_ver}")
     p.add_argument("--data", type=str, help="Path to dataset root (ImageFolder layout)")
+    p.add_argument("--test-data", type=str, default=None, dest="test_data",
+                   help="Path to a separate dataset root containing the test split "
+                        "(useful when subsamples live under a parent dir that holds the shared test set). "
+                        "Defaults to --data.")
     p.add_argument("--model", type=str, default=None,
                    help="Any timm model name (e.g. resnet50, efficientnet_b0, convnext_tiny)")
     p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
